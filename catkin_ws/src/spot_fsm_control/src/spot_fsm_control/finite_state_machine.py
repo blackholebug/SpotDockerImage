@@ -114,8 +114,9 @@ class SpotStateMachine(StateMachine):
         self.robot.stand(0.0)
 
     def on_enter_stand(self):
-        self.robot.stand(0.0)
-        print(f"Standing")
+        if self.robot:
+            self.robot.stand(0.0)
+            print(f"Standing")
     
     def on_enter_stand_high(self):
         self.robot.stand(0.1)

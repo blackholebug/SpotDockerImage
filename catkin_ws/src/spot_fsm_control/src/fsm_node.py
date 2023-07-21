@@ -34,15 +34,15 @@ from bosdyn.client.frame_helpers import GRAV_ALIGNED_BODY_FRAME_NAME, ODOM_FRAME
 from bosdyn.client.robot_state import RobotStateClient
 from bosdyn.client.manipulation_api_client import ManipulationApiClient
 
-
-from src.spot_control_interface import SpotControlInterface
-from src.finite_state_machine import SpotStateMachine
+from spot_fsm_control.spot_control_interface import SpotControlInterface
+from spot_fsm_control.finite_state_machine import SpotStateMachine
 
 logging.basicConfig(format="[LINE:%(lineno)d] %(levelname)-8s [%(asctime)s]  %(message)s", level=logging.INFO)
 
 def try_state_send(state_machine, action):
+    print("Current state:", state_machine.current_state)
     try:
-        print(f"trying to: {action}")
+        print(f"trying to: .{action}.")
         state_machine.send(action)
     except:
         try:
@@ -65,11 +65,12 @@ class FsmNode:
         self.sm = SpotStateMachine(robot=robot)
             
     def callback(self, data):
-        rospy.loginfo(rospy.get_caller_id() + "I heard %s", data.data)
+        # rospy.loginfo(rospy.get_caller_id() + "I heard %s", data.data)
         
+        print(f"\nI heard: {data.data}")
         # Check for data parsing and uncomment
         # self.sm.send(data)
-        # try_state_send(self.sm, data)
+        try_state_send(self.sm, data.data)
 
     
     def run(self):
@@ -92,37 +93,37 @@ def parse_arguments(params: Optional[Tuple] = None) -> argparse.Namespace:
 
 if __name__ == "__main__":
     args = parse_arguments()
-    conf = OmegaConf.load(args.path_to_config)
+    # conf = OmegaConf.load(args.path_to_config)
 
     robotInterface = SpotControlInterface()
-    sdk = bosdyn.client.create_standard_sdk('SpotControlInterface')
-    robot = sdk.create_robot("192.168.80.3")
-    bosdyn.client.util.authenticate(robot)
-    robot.time_sync.wait_for_sync()
-    assert not robot.is_estopped(), "Robot is estopped. Please use an external E-Stop client, " \
-                                    "such as the estop SDK example, to configure E-Stop."
+    # sdk = bosdyn.client.create_standard_sdk('SpotControlInterface')
+    # robot = sdk.create_robot("192.168.80.3")
+    # bosdyn.client.util.authenticate(robot)
+    # robot.time_sync.wait_for_sync()
+    # assert not robot.is_estopped(), "Robot is estopped. Please use an external E-Stop client, " \
+    #                                 "such as the estop SDK example, to configure E-Stop."
     
-    lease_client = robot.ensure_client(bosdyn.client.lease.LeaseClient.default_service_name)
-    with bosdyn.client.lease.LeaseKeepAlive(lease_client, must_acquire=True, return_at_exit=True):
-        # Now, we are ready to power on the robot. This call will block until the power
-        # is on. Commands would fail if this did not happen. We can also check that the robot is
-        # powered at any point.
-        robot.logger.info("Powering on robot... This may take several seconds.")
-        robot.power_on(timeout_sec=20)
-        assert robot.is_powered_on(), "Robot power on failed."
-        robot.logger.info("Robot powered on.")
+    # lease_client = robot.ensure_client(bosdyn.client.lease.LeaseClient.default_service_name)
+    # with bosdyn.client.lease.LeaseKeepAlive(lease_client, must_acquire=True, return_at_exit=True):
+    #     # Now, we are ready to power on the robot. This call will block until the power
+    #     # is on. Commands would fail if this did not happen. We can also check that the robot is
+    #     # powered at any point.
+    #     robot.logger.info("Powering on robot... This may take several seconds.")
+    #     robot.power_on(timeout_sec=20)
+    #     assert robot.is_powered_on(), "Robot power on failed."
+    #     robot.logger.info("Robot powered on.")
 
-        robotInterface.image_client = robot.ensure_client(ImageClient.default_service_name)
+    #     robotInterface.image_client = robot.ensure_client(ImageClient.default_service_name)
 
-        # Create a command client to be able to command the robot
-        robotInterface.command_client = robot.ensure_client(RobotCommandClient.default_service_name)
-        robotInterface.robot_state_client = robot.ensure_client(RobotStateClient.default_service_name)
-        robotInterface.manipulation_api_client = robot.ensure_client(ManipulationApiClient.default_service_name)
+    #     # Create a command client to be able to command the robot
+    #     robotInterface.command_client = robot.ensure_client(RobotCommandClient.default_service_name)
+    #     robotInterface.robot_state_client = robot.ensure_client(RobotStateClient.default_service_name)
+    #     robotInterface.manipulation_api_client = robot.ensure_client(ManipulationApiClient.default_service_name)
            
-        robotInterface.stand(0.0)
-        time.sleep(1)
+    #     robotInterface.stand(0.0)
+    #     time.sleep(1)
 
-        fsm = FsmNode(robot=robotInterface) 
-        fsm.run()
+    fsm = FsmNode(robot=None)#robotInterface) 
+    fsm.run()
         
     robotInterface.sit_down()

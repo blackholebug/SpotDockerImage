@@ -59,6 +59,10 @@
   <exec_depend>rospy</exec_depend>
   <exec_depend>std_msgs</exec_depend>
 
+  <!-- <exec_depend>ManipulatorFunctions</exec_depend>
+  <exec_depend>SpotStateMachine</exec_depend>
+  <exec_depend>SpotControlInterface</exec_depend> -->
+
 
   <!-- The export tag contains other, unspecified, tags -->
   <export>
