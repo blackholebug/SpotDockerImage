@@ -1,3 +1,6 @@
+#!/usr/bin/env python
+
+
 from statemachine import StateMachine, State
 # from spot_control_interface import SpotControlInterface
 
