@@ -22,10 +22,10 @@ from bosdyn.client.frame_helpers import GRAV_ALIGNED_BODY_FRAME_NAME, ODOM_FRAME
 from bosdyn.client.robot_state import RobotStateClient
 from bosdyn.client.manipulation_api_client import ManipulationApiClient
 
-# from manipulator import ManipulatorFunctions
+from spot_fsm_control.manipulator import ManipulatorFunctions
 
 
-class SpotControlInterface:#(ManipulatorFunctions):
+class SpotControlInterface(ManipulatorFunctions):
 
     def __init__(self):
         # super(SpotControlInterface, self).__init__()
