@@ -73,7 +73,7 @@ class SpotControlInterface(ManipulatorFunctions):
 
     def sit_down(self):
         print("sitting")
-        cmd = RobotCommandBuilder.synchro_sit_command()
+        cmd = RobotCommandBuilder.sit_command()
         self.command_client.robot_command(cmd)
 
     def stop(self):

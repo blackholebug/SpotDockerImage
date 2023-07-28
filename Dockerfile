@@ -1,30 +1,32 @@
-FROM ubuntu:20.04
+# syntax=docker/dockerfile:1
+# FROM ubuntu:20.04
+FROM osrf/ros:noetic-desktop
+EXPOSE 10000
+RUN rm /bin/sh && ln -s /bin/bash /bin/sh
 
-RUN sudo sh -c 'echo "deb http://packages.ros.org/ros/ubuntu $(lsb_release -sc) main" > /etc/apt/sources.list.d/ros-latest.list'
+COPY . .
 
-RUN sudo apt install curl
-RUN curl -s https://raw.githubusercontent.com/ros/rosdistro/master/ros.asc | sudo apt-key add -
 
-RUN sudo apt update
-RUN sudo apt install python3.8 python3.8-pip
-RUN sudo apt install ros-noetic-ros-base
+RUN apt-get update && apt-get install -y \
+    python3-pip
 
-RUN source /opt/ros/noetic/setup.bash
-RUN echo "source /opt/ros/noetic/setup.bash" >> ~/.bashrc
-RUN source ~/.bashrc
+RUN source ./ros_entrypoint.sh
+# RUN source /opt/ros/noetic/setup.bash
+# RUN rosdep update
 
-RUN sudo apt install python3-rosdep python3-rosinstall python3-rosinstall-generator python3-wstool build-essential
-RUN sudo apt install python3-rosdep
+RUN cd ./catkin_ws
+# RUN cd ./catkin_ws/src/spot_fsm_control
+# RUN echo $PWD
+# RUN python3.8 -m pip install -r requirements.txt
 
-RUN sudo rosdep init
-RUN rosdep update
 
-COPY /catkin_ws/ ~/
+# RUN cd ../..
+# RUN catkin_make
+# RUN source devel/setup.bash
 
-RUN cd ~/catkin_ws
-RUN catkin_make
-RUN source devel/setup.bash
 
-RUN cd src/spot_fsm_control
-RUN python3.8 -m pip install -r requirements.txt
-RUN rosrun spot_fsm_control fsm_node.py
+
+
+# RUN rosrun spot_fsm_control fsm_node.py
+
+

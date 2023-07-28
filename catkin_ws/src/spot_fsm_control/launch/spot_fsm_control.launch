@@ -1,0 +1,9 @@
+<launch>
+    <node
+      pkg="spot_fsm_control"
+      type="fsm_node.py"
+      name="fsm_node" 
+      output="screen"
+    />
+    <rosparam param="ROS_IP">0.0.0.0</rosparam>
+  </launch>

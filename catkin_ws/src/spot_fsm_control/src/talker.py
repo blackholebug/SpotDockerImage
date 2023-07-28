@@ -6,9 +6,13 @@ from std_msgs.msg import String
 def talker():
     pub = rospy.Publisher('chatter', String, queue_size=10)
     rospy.init_node('talker', anonymous=True)
-    rate = rospy.Rate(0.1) # 10hz
+    rate = rospy.Rate(0.2) # 10hz
+    actions = ['stand_up', 'sit_down']
+    i = 0
     while not rospy.is_shutdown():
-        hello_str = "stand_up"
+        hello_str = actions[(i % 2)]
+        i += 1
+        
         rospy.loginfo(hello_str)
         pub.publish(hello_str)
         rate.sleep()

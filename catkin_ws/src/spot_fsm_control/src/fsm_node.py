@@ -1,22 +1,19 @@
 #!/usr/bin/env python
 
+import subprocess
+import time
+roscore = subprocess.Popen('roscore')
+time.sleep(1)
+
 import sys
 sys.path.append("./hagrid/")
 sys.path.append("./src/")
 
 import rospy
 from std_msgs.msg import String
+import ast
 
-import argparse
 import logging
-import time
-from typing import Optional, Tuple
-
-import cv2
-# import mediapipe as mp
-import numpy as np
-from omegaconf import OmegaConf
-from PIL import Image, ImageOps
 # mp_drawing = mp.solutions.drawing_utils
 # mp_drawing_styles = mp.solutions.drawing_styles
 
@@ -65,11 +62,9 @@ class FsmNode:
         self.sm = SpotStateMachine(robot=robot)
             
     def callback(self, data):
-        # rospy.loginfo(rospy.get_caller_id() + "I heard %s", data.data)
-        
-        print(f"\nI heard: {data.data}")
-        # Check for data parsing and uncomment
-        # self.sm.send(data)
+        data_parsed = ast.literal_eval("{'muffin' : 'lolz', 'foo' : 'kitty'}")
+        print(f"\nI heard: {data_parsed}")
+        # print(f"\nI heard: {data.data}")
         try_state_send(self.sm, data.data)
 
     
@@ -80,50 +75,44 @@ class FsmNode:
     
         rospy.spin()
 
-def parse_arguments(params: Optional[Tuple] = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Demo detection...")
-
-    parser.add_argument("-p", "--path_to_config", default="hagrid/detector/config/default.yaml", required=False, type=str, help="Path to config")
-
-    parser.add_argument("-lm", "--landmarks", required=False, action="store_true", help="Use landmarks")
-
-    known_args, _ = parser.parse_known_args(params)
-    return known_args
-
 
 if __name__ == "__main__":
-    args = parse_arguments()
-    # conf = OmegaConf.load(args.path_to_config)
 
-    robotInterface = SpotControlInterface()
-    # sdk = bosdyn.client.create_standard_sdk('SpotControlInterface')
-    # robot = sdk.create_robot("192.168.80.3")
-    # bosdyn.client.util.authenticate(robot)
-    # robot.time_sync.wait_for_sync()
-    # assert not robot.is_estopped(), "Robot is estopped. Please use an external E-Stop client, " \
-    #                                 "such as the estop SDK example, to configure E-Stop."
+    # robotInterface = SpotControlInterface()
+    robotInterface = None
     
-    # lease_client = robot.ensure_client(bosdyn.client.lease.LeaseClient.default_service_name)
-    # with bosdyn.client.lease.LeaseKeepAlive(lease_client, must_acquire=True, return_at_exit=True):
-    #     # Now, we are ready to power on the robot. This call will block until the power
-    #     # is on. Commands would fail if this did not happen. We can also check that the robot is
-    #     # powered at any point.
-    #     robot.logger.info("Powering on robot... This may take several seconds.")
-    #     robot.power_on(timeout_sec=20)
-    #     assert robot.is_powered_on(), "Robot power on failed."
-    #     robot.logger.info("Robot powered on.")
-
-    #     robotInterface.image_client = robot.ensure_client(ImageClient.default_service_name)
-
-    #     # Create a command client to be able to command the robot
-    #     robotInterface.command_client = robot.ensure_client(RobotCommandClient.default_service_name)
-    #     robotInterface.robot_state_client = robot.ensure_client(RobotStateClient.default_service_name)
-    #     robotInterface.manipulation_api_client = robot.ensure_client(ManipulationApiClient.default_service_name)
-           
-    #     robotInterface.stand(0.0)
-    #     time.sleep(1)
-
-    fsm = FsmNode(robot=None)#robotInterface) 
-    fsm.run()
+    if robotInterface:
+        sdk = bosdyn.client.create_standard_sdk('SpotControlInterface')
+        robot = sdk.create_robot("192.168.80.3")
+        bosdyn.client.util.authenticate(robot)
+        robot.time_sync.wait_for_sync()
+        assert not robot.is_estopped(), "Robot is estopped. Please use an external E-Stop client, " \
+                                        "such as the estop SDK example, to configure E-Stop."
         
-    robotInterface.sit_down()
+        lease_client = robot.ensure_client(bosdyn.client.lease.LeaseClient.default_service_name)
+        with bosdyn.client.lease.LeaseKeepAlive(lease_client, must_acquire=True, return_at_exit=True):
+            # Now, we are ready to power on the robot. This call will block until the power
+            # is on. Commands would fail if this did not happen. We can also check that the robot is
+            # powered at any point.
+            robot.logger.info("Powering on robot... This may take several seconds.")
+            robot.power_on(timeout_sec=20)
+            assert robot.is_powered_on(), "Robot power on failed."
+            robot.logger.info("Robot powered on.")
+
+            robotInterface.image_client = robot.ensure_client(ImageClient.default_service_name)
+
+            # Create a command client to be able to command the robot
+            robotInterface.command_client = robot.ensure_client(RobotCommandClient.default_service_name)
+            robotInterface.robot_state_client = robot.ensure_client(RobotStateClient.default_service_name)
+            robotInterface.manipulation_api_client = robot.ensure_client(ManipulationApiClient.default_service_name)
+            
+            robotInterface.stand(0.0)
+            time.sleep(1)
+
+            fsm = FsmNode(robot=robotInterface) 
+            fsm.run()
+    else:
+        fsm = FsmNode(robot=robotInterface) 
+        fsm.run()
+        
+    # robotInterface.sit_down()
