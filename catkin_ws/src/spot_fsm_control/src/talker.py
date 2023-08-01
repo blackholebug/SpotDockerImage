@@ -4,7 +4,7 @@ import rospy
 from std_msgs.msg import String
 
 def talker():
-    pub = rospy.Publisher('chatter', String, queue_size=10)
+    pub = rospy.Publisher('spot_fsm_control_msgs/Action', String, queue_size=10)
     rospy.init_node('talker', anonymous=True)
     rate = rospy.Rate(0.2) # 10hz
     actions = ['stand_up', 'sit_down']

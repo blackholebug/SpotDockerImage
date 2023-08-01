@@ -1,10 +1,6 @@
 #!/usr/bin/env python
 
-import subprocess
 import time
-roscore = subprocess.Popen('roscore')
-time.sleep(1)
-
 import sys
 sys.path.append("./hagrid/")
 sys.path.append("./src/")
@@ -62,17 +58,14 @@ class FsmNode:
         self.sm = SpotStateMachine(robot=robot)
             
     def callback(self, data):
-        data_parsed = ast.literal_eval("{'muffin' : 'lolz', 'foo' : 'kitty'}")
-        print(f"\nI heard: {data_parsed}")
-        # print(f"\nI heard: {data.data}")
+        # data_parsed = ast.literal_eval(data)
+        print(f"\nI heard: {data.data}")
         try_state_send(self.sm, data.data)
 
     
     def run(self):
         rospy.init_node('listener', anonymous=True)
- 
         rospy.Subscriber("chatter", String, self.callback)
-    
         rospy.spin()
 
 
