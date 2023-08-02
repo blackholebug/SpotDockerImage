@@ -70,6 +70,7 @@ class SpotControlInterface(ManipulatorFunctions):
         print("Move:", self.forward, self.strafe, self.rotate)
         cmd = RobotCommandBuilder.velocity_command(self.forward, self.strafe, self.rotate)
         self.command_client.robot_command(cmd, end_time_secs=time.time() + duration) # robot_command_async
+        self.forward, self.strafe, self.rotate = 0, 0, 0
 
     def sit_down(self):
         print("sitting")
@@ -84,7 +85,6 @@ class SpotControlInterface(ManipulatorFunctions):
 
     def keyboard_movement_control(self):
         wait_time = 20
-        
         while True:
             self.forward, self.strafe, self.rotate = 0, 0, 0
 

@@ -61,7 +61,6 @@ class FsmNode:
         # data_parsed = ast.literal_eval(data)
         print(f"\nI heard: {data.data}")
         try_state_send(self.sm, data.data)
-
     
     def run(self):
         rospy.init_node('listener', anonymous=True)
@@ -71,12 +70,12 @@ class FsmNode:
 
 if __name__ == "__main__":
 
-    # robotInterface = SpotControlInterface()
-    robotInterface = None
+    robotInterface = SpotControlInterface()
+    # robotInterface = None
     
     if robotInterface:
         sdk = bosdyn.client.create_standard_sdk('SpotControlInterface')
-        robot = sdk.create_robot("192.168.80.3")
+        robot = sdk.create_robot("192.168.196.157")
         bosdyn.client.util.authenticate(robot)
         robot.time_sync.wait_for_sync()
         assert not robot.is_estopped(), "Robot is estopped. Please use an external E-Stop client, " \

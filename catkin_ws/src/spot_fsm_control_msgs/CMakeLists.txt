@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 2.8.3)
-project(unity_robotics_demo_msgs)
+project(spot_fsm_control_msgs)
 
 find_package(catkin REQUIRED COMPONENTS
   rospy

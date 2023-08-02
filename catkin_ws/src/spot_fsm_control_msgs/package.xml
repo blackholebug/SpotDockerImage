@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <package format="2">
-  <name>unity_robotics_demo_msgs</name>
+  <name>spot_fsm_control_msgs</name>
   <version>0.0.1</version>
   <description>Messages for the unity_robotics_demo package (ROS1 version)</description>
 
