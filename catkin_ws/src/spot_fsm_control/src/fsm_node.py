@@ -58,7 +58,6 @@ class FsmNode:
         self.sm = SpotStateMachine(robot=robot)
             
     def callback(self, data):
-        # data_parsed = ast.literal_eval(data)
         print(f"\nI heard: {data.data}")
         try_state_send(self.sm, data.data)
     
@@ -70,8 +69,8 @@ class FsmNode:
 
 if __name__ == "__main__":
 
-    robotInterface = SpotControlInterface()
-    # robotInterface = None
+    # robotInterface = SpotControlInterface()
+    robotInterface = None
     
     if robotInterface:
         sdk = bosdyn.client.create_standard_sdk('SpotControlInterface')

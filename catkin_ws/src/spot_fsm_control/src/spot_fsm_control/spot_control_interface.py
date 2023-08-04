@@ -32,6 +32,7 @@ class SpotControlInterface(ManipulatorFunctions):
         self.hostname = "192.168.80.3"
         self.command_client = None
         self.forward, self.strafe, self.rotate = 0, 0, 0
+        self.prev_close_or_open = "close"
 
 
     def establish_connection(self):
@@ -60,7 +61,10 @@ class SpotControlInterface(ManipulatorFunctions):
             self.manipulation_api_client = robot.ensure_client(ManipulationApiClient.default_service_name)
 
             # self.gaze_control()
-        
+
+    def stop(self):
+        cmd = RobotCommandBuilder.stop_command()
+        self.command_client.robot_command(cmd)
 
     def stand(self, height):
         cmd = RobotCommandBuilder.stand_command(body_height=height)
@@ -82,6 +86,35 @@ class SpotControlInterface(ManipulatorFunctions):
         cmd = RobotCommandBuilder.stop_command()
         self.command_client.robot_command(cmd)
 
+    def gripper(self, close_or_open):
+        if close_or_open == self.prev_close_or_open:
+            pass
+        elif close_or_open == "open":
+            cmd = RobotCommandBuilder.claw_gripper_open_command()
+            self.command_client.robot_command(cmd)
+        elif close_or_open == "close":
+            cmd = RobotCommandBuilder.claw_gripper_close_command()
+            self.command_client.robot_command(cmd)
+        self.prev_close_or_open = close_or_open
+            
+    def direct_control(self, pos, quat):
+        cmd = RobotCommandBuilder.arm_pose_command(
+            pos[0],
+            pos[1],
+            pos[2],
+            quat[0],
+            quat[1],
+            quat[2],
+            quat[3]
+        )
+        self.command_client.robot_command(cmd)
+        
+    def ready_or_stow_arm(self, stow=False):
+        if stow:
+            cmd = RobotCommandBuilder.arm_stow_command()
+        else:
+            cmd = RobotCommandBuilder.arm_ready_command()
+        self.command_client.robot_command(cmd)
 
     def keyboard_movement_control(self):
         wait_time = 20

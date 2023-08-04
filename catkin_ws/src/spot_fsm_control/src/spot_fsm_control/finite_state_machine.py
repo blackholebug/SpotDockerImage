@@ -52,6 +52,12 @@ class SpotStateMachine(StateMachine):
     start_gaze = stand.to(gaze_control)
     start_trajectory = stand.to(arm_trajectory)
     
+    direct_arm_control = State()
+    start_direct_arm_control = stand.to(gaze_control)
+    
+    
+    
+    
     stop_action = (
         walk_forward.to(stand) |
         walk_backward.to(stand) |
@@ -63,7 +69,8 @@ class SpotStateMachine(StateMachine):
         face_operator.to(stand) |
         pick_object.to(stand) |
         arm_trajectory.to(stand) |
-        gaze_control.to(stand)
+        gaze_control.to(stand) |
+        direct_arm_control.to(stand)
     )
     
     turn_off = State(final=True)
@@ -74,6 +81,7 @@ class SpotStateMachine(StateMachine):
         super().__init__()
         
     def after_stop_action(self):
+        self.robot.stop()
         print("Action stopped.")
         
     def on_enter_walk_forward(self):
