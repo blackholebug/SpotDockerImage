@@ -4,9 +4,9 @@ from geometry_msgs.msg import Pose
 
 class SpotDirectArmControl:
     
-    def __init__(self, robot, state_machine):
+    def __init__(self, robot):
         self.robot = robot
-        self.sm = state_machine
+        self.current_state = "stand"
     
     def callback_gripper(self, data):
         close_or_open = data.data
@@ -23,7 +23,7 @@ class SpotDirectArmControl:
         while not rospy.is_shutdown():
             rospy.Subscriber("gripper", String, self.callback_gripper)
             rospy.Subscriber("hand_pose", Pose, self.callback_hand_pose)
-            if self.sm.current_state != "direct_arm_control":
+            if self.current_state != "direct_arm_control":
                 rospy.signal_shutdown()
                 
         self.robot.ready_or_stow_arm(stow=True)

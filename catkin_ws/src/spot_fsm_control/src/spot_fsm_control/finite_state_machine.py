@@ -1,8 +1,9 @@
 #!/usr/bin/env python
 
-
+import time
 from statemachine import StateMachine, State
 # from spot_control_interface import SpotControlInterface
+from arm_direct_control import SpotDirectArmControl
 
 class SpotStateMachine(StateMachine):
     """
@@ -78,6 +79,7 @@ class SpotStateMachine(StateMachine):
 
     def __init__(self, robot):
         self.robot = robot
+        self.direct_arm_control = SpotDirectArmControl(robot=robot)
         super().__init__()
         
     def after_stop_action(self):
@@ -145,6 +147,14 @@ class SpotStateMachine(StateMachine):
 
     def on_enter_arm_trajectory(self):
         self.robot.arm_trajectory()
+        
+    def on_enter_direct_arm_control(self):
+        self.direct_arm_control.current_state = "direct_arm_control"
+        self.direct_arm_control.run()
+        
+    def on_exit_direct_arm_control(self):
+        self.direct_arm_control.current_state = "stand"
+        time.sleep(2)
 
     def on_enter_turn_off(self):
         self.robot.stand(0.0)
