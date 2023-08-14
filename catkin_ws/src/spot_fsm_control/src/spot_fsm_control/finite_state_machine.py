@@ -2,8 +2,8 @@
 
 import time
 from statemachine import StateMachine, State
+import numpy as np
 # from spot_control_interface import SpotControlInterface
-from arm_direct_control import SpotDirectArmControl
 
 class SpotStateMachine(StateMachine):
     """
@@ -54,10 +54,7 @@ class SpotStateMachine(StateMachine):
     start_trajectory = stand.to(arm_trajectory)
     
     direct_arm_control = State()
-    start_direct_arm_control = stand.to(gaze_control)
-    
-    
-    
+    start_direct_arm_control = stand.to(direct_arm_control)
     
     stop_action = (
         walk_forward.to(stand) |
@@ -79,11 +76,11 @@ class SpotStateMachine(StateMachine):
 
     def __init__(self, robot):
         self.robot = robot
-        self.direct_arm_control = SpotDirectArmControl(robot=robot)
         super().__init__()
         
     def after_stop_action(self):
         self.robot.stop()
+        self.robot.ready_or_stow_arm(stow=True)
         print("Action stopped.")
         
     def on_enter_walk_forward(self):
@@ -149,11 +146,22 @@ class SpotStateMachine(StateMachine):
         self.robot.arm_trajectory()
         
     def on_enter_direct_arm_control(self):
-        self.direct_arm_control.current_state = "direct_arm_control"
-        self.direct_arm_control.run()
+        self.robot.ready_or_stow_arm()
+        
+        # time.sleep(2)
+        pos = [0,0,0]
+        quat = [0, 0.7071068, 0, 0.7071068]
+        self.robot.cartesian_hand_position(pos, quat)
+        
+        # time.sleep(2)
+        self.robot.init_pos_empty = True
+        self.robot.current_state_direct_control = True
+        self.robot.direct_control_trajectory()
         
     def on_exit_direct_arm_control(self):
-        self.direct_arm_control.current_state = "stand"
+        print("Exiting direct control")
+        self.robot.current_state_direct_control = False
+        self.robot.ready_or_stow_arm(stow=True)
         time.sleep(2)
 
     def on_enter_turn_off(self):

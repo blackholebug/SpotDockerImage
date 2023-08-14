@@ -33,6 +33,8 @@ class SpotControlInterface(ManipulatorFunctions):
         self.command_client = None
         self.forward, self.strafe, self.rotate = 0, 0, 0
         self.prev_close_or_open = "close"
+        self.direct_control_trajectory_list = []
+        self.current_state_direct_control = False
 
 
     def establish_connection(self):
@@ -65,9 +67,11 @@ class SpotControlInterface(ManipulatorFunctions):
     def stop(self):
         cmd = RobotCommandBuilder.stop_command()
         self.command_client.robot_command(cmd)
+        cmd = RobotCommandBuilder.arm_stow_command()
+        self.command_client.robot_command(cmd)
 
     def stand(self, height):
-        cmd = RobotCommandBuilder.stand_command(body_height=height)
+        cmd = RobotCommandBuilder.synchro_stand_command(body_height=height)
         self.command_client.robot_command(cmd)
 
     def move_command(self, duration=1):
@@ -78,7 +82,7 @@ class SpotControlInterface(ManipulatorFunctions):
 
     def sit_down(self):
         print("sitting")
-        cmd = RobotCommandBuilder.sit_command()
+        cmd = RobotCommandBuilder.synchro_sit_command()
         self.command_client.robot_command(cmd)
 
     def stop(self):
@@ -87,9 +91,7 @@ class SpotControlInterface(ManipulatorFunctions):
         self.command_client.robot_command(cmd)
 
     def gripper(self, close_or_open):
-        if close_or_open == self.prev_close_or_open:
-            pass
-        elif close_or_open == "open":
+        if close_or_open == "open":
             cmd = RobotCommandBuilder.claw_gripper_open_command()
             self.command_client.robot_command(cmd)
         elif close_or_open == "close":
@@ -97,24 +99,66 @@ class SpotControlInterface(ManipulatorFunctions):
             self.command_client.robot_command(cmd)
         self.prev_close_or_open = close_or_open
             
-    def direct_control(self, pos, quat):
-        cmd = RobotCommandBuilder.arm_pose_command(
-            pos[0],
-            pos[1],
-            pos[2],
-            quat[0],
-            quat[1],
-            quat[2],
-            quat[3]
-        )
-        self.command_client.robot_command(cmd)
+    def cartesian_hand_position(self, pos, quat, time=1):
+        hand_ewrt_flat_body = geometry_pb2.Vec3(x=pos[0], y=pos[1], z=pos[2])
+        flat_body_Q_hand = geometry_pb2.Quaternion(w=quat[3], x=quat[0], y=quat[1], z=quat[2])
+
+        flat_body_T_hand = geometry_pb2.SE3Pose(position=hand_ewrt_flat_body,
+                                                rotation=flat_body_Q_hand)
+
+        robot_state = self.robot_state_client.get_robot_state()
+        target_frame = "hand"
+        source_frame = "flat_body"
+        odom_T_flat_body = get_a_tform_b(robot_state.kinematic_state.transforms_snapshot,
+                                         source_frame, target_frame)
+
+        odom_T_hand = odom_T_flat_body * math_helpers.SE3Pose.from_proto(flat_body_T_hand)
+
+        # duration in seconds
+        seconds = time
+
+        arm_command = RobotCommandBuilder.arm_pose_command(
+            odom_T_hand.x, odom_T_hand.y, odom_T_hand.z, odom_T_hand.rot.w, odom_T_hand.rot.x,
+            odom_T_hand.rot.y, odom_T_hand.rot.z, source_frame, seconds)
+
+        # Send the request
+        cmd_id = self.command_client.robot_command(arm_command)
+        print("Moving arm.")
+
+        # Wait until the arm arrives at the goal.
+        block_until_arm_arrives(self.command_client, cmd_id)
+        print("Arm moved.")
         
+    def direct_control_trajectory(self):
+        print("STARTED DIRECT CONTROL LOOP")
+        while self.current_state_direct_control:
+            if len(self.direct_control_trajectory_list) >= 15:
+                print(f"Exextecuting path, total waypoint count {len(self.direct_control_trajectory_list)}")
+                hand_traj = trajectory_pb2.SE3Trajectory(points=self.direct_control_trajectory_list)
+                self.direct_control_trajectory_list = self.direct_control_trajectory_list[-1:]
+                arm_cartesian_command = arm_command_pb2.ArmCartesianCommand.Request(pose_trajectory_in_task=hand_traj, root_frame_name="hand") #  "flat_body")
+                
+                # Pack everything up in protos.
+                arm_command = arm_command_pb2.ArmCommand.Request(arm_cartesian_command=arm_cartesian_command)
+                synchronized_command = synchronized_command_pb2.SynchronizedCommand.Request(arm_command=arm_command)
+                robot_command = robot_command_pb2.RobotCommand(synchronized_command=synchronized_command)
+                # print('Sending trajectory command... \n')
+
+                # Send the trajectory to the robot.
+                self.command_client.robot_command(robot_command)                
+            else:
+                time.sleep(0.05)
+
+        print(f"Exiting loop of direct control, with state {self.current_state_direct_control}")
+        
+                
     def ready_or_stow_arm(self, stow=False):
         if stow:
             cmd = RobotCommandBuilder.arm_stow_command()
         else:
             cmd = RobotCommandBuilder.arm_ready_command()
-        self.command_client.robot_command(cmd)
+        cmd_id = self.command_client.robot_command(cmd)
+        block_until_arm_arrives(self.command_client, cmd_id)
 
     def keyboard_movement_control(self):
         wait_time = 20

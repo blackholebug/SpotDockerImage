@@ -7,8 +7,9 @@ sys.path.append("./src/")
 
 import rospy
 from std_msgs.msg import String
+from geometry_msgs.msg import Pose
 import ast
-
+import numpy as np
 import logging
 # mp_drawing = mp.solutions.drawing_utils
 # mp_drawing_styles = mp.solutions.drawing_styles
@@ -37,44 +38,98 @@ def try_state_send(state_machine, action):
     try:
         print(f"trying to: .{action}.")
         state_machine.send(action)
-    except:
+    except Exception as e:
+        print(e)
         try:
             state_machine.send("stop_action")
             print("Stop action first")
             state_machine.send(action)
-        except:
+        except Exception as e:
+            print(e)
             try:
                 state_machine.send("stand_up")
                 print("Stand up first")
                 state_machine.send(action)
-            except:
+            except Exception as e:
                 print(f"{action} not possible")
+                print(e)
                 ## Do some handling or more feedback to user
 
 
 class FsmNode:
 
     def __init__(self, robot: SpotControlInterface):
+        self.robot = robot
+        self.robot.init_pos_empty = False
         self.sm = SpotStateMachine(robot=robot)
+        self.arm_pos_init = [0, 0, 0]
+        self.arm_ori_init = [1, 0, 0, 0]
             
-    def callback(self, data):
+    def callback_action(self, data):
         print(f"\nI heard: {data.data}")
+        if data.data == "stop_action" and self.robot.current_state_direct_control:
+            self.robot.current_state_direct_control = False
+            print("Turning Of direct control")
         try_state_send(self.sm, data.data)
+        
+    def callback_gripper(self, data):
+        if self.robot.current_state_direct_control:
+            print(data)
+            close_or_open = data.data
+            self.robot.gripper(close_or_open)
+            # time.sleep(1)
+        else:
+            pass
+        
+    
+    def callback_hand_pose(self, data):
+        if self.robot.current_state_direct_control:
+            if self.robot.init_pos_empty:
+                self.arm_pos_init = [data.position.x, data.position.y, data.position.z]
+                self.arm_ori_init = math_helpers.Quat(
+                    w = data.orientation.w,
+                    x = data.orientation.x,
+                    y = data.orientation.y,
+                    z = data.orientation.z
+                )
+                self.robot.init_pos_empty = False
+        
+            pos = 8*(np.array([data.position.x, data.position.y, data.position.z] - np.array(self.arm_pos_init)))
+            
+            quaternion = math_helpers.Quat(
+                w = data.orientation.w,
+                x = data.orientation.x,
+                y = data.orientation.y,
+                z = data.orientation.z
+            )
+            orientation = math_helpers.Quat()
+            
+            hand_pose = math_helpers.SE3Pose(x=pos[0], y=pos[1], z=pos[2], rot=orientation)
+            traj_point = trajectory_pb2.SE3TrajectoryPoint(pose=hand_pose.to_proto())
+            self.robot.direct_control_trajectory_list.append(traj_point)
+            
+            self.arm_pos_init = np.array([data.position.x, data.position.y, data.position.z])
+            self.arm_ori_init = quaternion
+            
+        else:
+            pass
     
     def run(self):
         rospy.init_node('listener', anonymous=True)
-        rospy.Subscriber("chatter", String, self.callback)
+        rospy.Subscriber("chatter", String, self.callback_action)
+        rospy.Subscriber("gripper", String, self.callback_gripper)
+        rospy.Subscriber("hand_pose", Pose, self.callback_hand_pose)
         rospy.spin()
 
 
 if __name__ == "__main__":
 
-    # robotInterface = SpotControlInterface()
-    robotInterface = None
+    robotInterface = SpotControlInterface()
+    # robotInterface = None
     
     if robotInterface:
         sdk = bosdyn.client.create_standard_sdk('SpotControlInterface')
-        robot = sdk.create_robot("192.168.196.157")
+        robot = sdk.create_robot("192.168.51.157")
         bosdyn.client.util.authenticate(robot)
         robot.time_sync.wait_for_sync()
         assert not robot.is_estopped(), "Robot is estopped. Please use an external E-Stop client, " \
