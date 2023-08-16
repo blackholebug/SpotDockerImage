@@ -123,34 +123,13 @@ class SpotControlInterface(ManipulatorFunctions):
 
         # Send the request
         cmd_id = self.command_client.robot_command(arm_command)
-        print("Moving arm.")
 
         # Wait until the arm arrives at the goal.
         block_until_arm_arrives(self.command_client, cmd_id)
-        print("Arm moved.")
         
-    def direct_control_trajectory(self):
-        print("STARTED DIRECT CONTROL LOOP")
-        while self.current_state_direct_control:
-            if len(self.direct_control_trajectory_list) >= 15:
-                print(f"Exextecuting path, total waypoint count {len(self.direct_control_trajectory_list)}")
-                hand_traj = trajectory_pb2.SE3Trajectory(points=self.direct_control_trajectory_list)
-                self.direct_control_trajectory_list = self.direct_control_trajectory_list[-1:]
-                arm_cartesian_command = arm_command_pb2.ArmCartesianCommand.Request(pose_trajectory_in_task=hand_traj, root_frame_name="hand") #  "flat_body")
-                
-                # Pack everything up in protos.
-                arm_command = arm_command_pb2.ArmCommand.Request(arm_cartesian_command=arm_cartesian_command)
-                synchronized_command = synchronized_command_pb2.SynchronizedCommand.Request(arm_command=arm_command)
-                robot_command = robot_command_pb2.RobotCommand(synchronized_command=synchronized_command)
-                # print('Sending trajectory command... \n')
-
-                # Send the trajectory to the robot.
-                self.command_client.robot_command(robot_command)                
-            else:
-                time.sleep(0.05)
-
-        print(f"Exiting loop of direct control, with state {self.current_state_direct_control}")
-        
+    def stop_direct_control(self):
+        self.current_state_direct_control = False
+        print("Stopping Direct Control")
                 
     def ready_or_stow_arm(self, stow=False):
         if stow:

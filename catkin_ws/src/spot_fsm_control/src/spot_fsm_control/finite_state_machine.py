@@ -149,14 +149,14 @@ class SpotStateMachine(StateMachine):
         self.robot.ready_or_stow_arm()
         
         # time.sleep(2)
-        pos = [0,0,0]
+        pos = [-0.2, 0, -0.2]
         quat = [0, 0.7071068, 0, 0.7071068]
         self.robot.cartesian_hand_position(pos, quat)
-        
-        # time.sleep(2)
+        time.sleep(2)
+    
         self.robot.init_pos_empty = True
         self.robot.current_state_direct_control = True
-        self.robot.direct_control_trajectory()
+        # self.robot.direct_control_trajectory()
         
     def on_exit_direct_arm_control(self):
         print("Exiting direct control")

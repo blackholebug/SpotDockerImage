@@ -36,7 +36,6 @@ logging.basicConfig(format="[LINE:%(lineno)d] %(levelname)-8s [%(asctime)s]  %(m
 def try_state_send(state_machine, action):
     print("Current state:", state_machine.current_state)
     try:
-        print(f"trying to: .{action}.")
         state_machine.send(action)
     except Exception as e:
         print(e)
@@ -64,12 +63,15 @@ class FsmNode:
         self.sm = SpotStateMachine(robot=robot)
         self.arm_pos_init = [0, 0, 0]
         self.arm_ori_init = [1, 0, 0, 0]
+        zero_pose = math_helpers.SE3Pose(x=0, y=0, z=0, rot=math_helpers.Quat())
+        zero_trajectory_pose = trajectory_pb2.SE3TrajectoryPoint(pose=zero_pose.to_proto())
+        self.direct_control_trajectory_list = [zero_trajectory_pose]
             
     def callback_action(self, data):
         print(f"\nI heard: {data.data}")
         if data.data == "stop_action" and self.robot.current_state_direct_control:
+            self.robot.stop_direct_control()
             self.robot.current_state_direct_control = False
-            print("Turning Of direct control")
         try_state_send(self.sm, data.data)
         
     def callback_gripper(self, data):
@@ -106,10 +108,31 @@ class FsmNode:
             
             hand_pose = math_helpers.SE3Pose(x=pos[0], y=pos[1], z=pos[2], rot=orientation)
             traj_point = trajectory_pb2.SE3TrajectoryPoint(pose=hand_pose.to_proto())
-            self.robot.direct_control_trajectory_list.append(traj_point)
+            self.direct_control_trajectory_list.append(traj_point)
             
             self.arm_pos_init = np.array([data.position.x, data.position.y, data.position.z])
             self.arm_ori_init = quaternion
+            
+            if len(self.direct_control_trajectory_list) >= 12:
+                zero_pose = math_helpers.SE3Pose(x=0, y=0, z=0, rot=math_helpers.Quat())
+                zero_trajectory_pose = trajectory_pb2.SE3TrajectoryPoint(pose=zero_pose.to_proto())
+                print(f"Exextecuting path, total waypoint count {len(self.direct_control_trajectory_list)}")
+                hand_traj = trajectory_pb2.SE3Trajectory(points=self.direct_control_trajectory_list)
+                
+                zero_pose = math_helpers.SE3Pose(x=0, y=0, z=0, rot=math_helpers.Quat())
+                zero_trajectory_pose = trajectory_pb2.SE3TrajectoryPoint(pose=zero_pose.to_proto())
+                self.direct_control_trajectory_list = [zero_trajectory_pose]
+                
+                arm_cartesian_command = arm_command_pb2.ArmCartesianCommand.Request(pose_trajectory_in_task=hand_traj, root_frame_name="hand") #  "flat_body")
+                
+                # Pack everything up in protos.
+                arm_command = arm_command_pb2.ArmCommand.Request(arm_cartesian_command=arm_cartesian_command)
+                synchronized_command = synchronized_command_pb2.SynchronizedCommand.Request(arm_command=arm_command)
+                robot_command = robot_command_pb2.RobotCommand(synchronized_command=synchronized_command)
+                # print('Sending trajectory command... \n')
+
+                # Send the trajectory to the robot.
+                self.robot.command_client.robot_command(robot_command)
             
         else:
             pass
