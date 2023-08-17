@@ -16,6 +16,7 @@ class GestureClassification:
     def run(self):
         rospy.init_node('listener', anonymous=True)
         rospy.Subscriber("hand_keypoints", Float32MultiArray, self.callback)
+        rospy.spin()
 
 
 if __name__ == "__main__":
