@@ -21,3 +21,4 @@ python-dotenv
 python-statemachine
 rospy
 omegaconf
+scikit-learn

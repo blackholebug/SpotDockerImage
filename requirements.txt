@@ -20,5 +20,6 @@ wrapt==1.14.1
 python-dotenv
 python-statemachine
 matplotlib
+scikit-learn
 # rospy
 # omegaconf
