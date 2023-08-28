@@ -1,9 +1,13 @@
 #!/usr/bin/env python
 
 import time
+import math
 from statemachine import StateMachine, State
 import numpy as np
 # from spot_control_interface import SpotControlInterface
+from spot_fsm_control.arm_impedance_control_helpers import get_root_T_ground_body
+from bosdyn.client.frame_helpers import ODOM_FRAME_NAME, get_a_tform_b
+from bosdyn.client.math_helpers import Quat, SE3Pose
 
 class SpotStateMachine(StateMachine):
     """
@@ -144,15 +148,19 @@ class SpotStateMachine(StateMachine):
 
     def on_enter_arm_trajectory(self):
         self.robot.arm_trajectory()
-        
+
     def on_enter_direct_arm_control(self):
         self.robot.ready_or_stow_arm()
         
-        # time.sleep(2)
-        pos = [-0.2, 0, -0.2]
-        quat = [0, 0.7071068, 0, 0.7071068]
-        self.robot.cartesian_hand_position(pos, quat)
+        task_T_tool_desired = SE3Pose(0.75, 0, 0.45, Quat(1, 0, 0, 0))
+        odom_T_task = get_root_T_ground_body(robot_state=self.robot.robot_state_client.get_robot_state(),
+                                             root_frame_name=ODOM_FRAME_NAME)
+        wr1_T_tool = SE3Pose(0, 0, 0, Quat.from_pitch(-math.pi / 2))
+        
+        self.robot.move_to_cartesian_pose_rt_task(task_T_tool_desired, odom_T_task, wr1_T_tool)
+        
         time.sleep(2)
+        print("GO DIRECT CONTROL")
     
         self.robot.init_pos_empty = True
         self.robot.current_state_direct_control = True
@@ -161,8 +169,11 @@ class SpotStateMachine(StateMachine):
     def on_exit_direct_arm_control(self):
         print("Exiting direct control")
         self.robot.current_state_direct_control = False
-        self.robot.ready_or_stow_arm(stow=True)
+        time.sleep(1)
+        self.robot.stand(0.0)
         time.sleep(2)
+        self.robot.ready_or_stow_arm(stow=True)
+        time.sleep(1)
 
     def on_enter_turn_off(self):
         self.robot.stand(0.0)

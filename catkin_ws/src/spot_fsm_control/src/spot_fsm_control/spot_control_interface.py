@@ -106,7 +106,7 @@ class SpotControlInterface(ManipulatorFunctions):
             
     def cartesian_hand_position(self, pos, quat, time=1):
         hand_ewrt_flat_body = geometry_pb2.Vec3(x=pos[0], y=pos[1], z=pos[2])
-        flat_body_Q_hand = geometry_pb2.Quaternion(w=quat[3], x=quat[0], y=quat[1], z=quat[2])
+        flat_body_Q_hand = geometry_pb2.Quaternion(w=quat[0], x=quat[1], y=quat[2], z=quat[3])
 
         flat_body_T_hand = geometry_pb2.SE3Pose(position=hand_ewrt_flat_body,
                                                 rotation=flat_body_Q_hand)
@@ -144,12 +144,13 @@ class SpotControlInterface(ManipulatorFunctions):
         # Do a single point goto to a desired pose in the task frame.
         cartesian_traj = arm_cart_cmd.pose_trajectory_in_task
         traj_pt = cartesian_traj.points.add()
-        traj_pt.time_since_reference.CopyFrom(seconds_to_duration(2.0))
+        traj_pt.time_since_reference.CopyFrom(seconds_to_duration(1.0))
         traj_pt.pose.CopyFrom(task_T_desired.to_proto())
 
         # Execute the Cartesian command.
         cmd_id = self.command_client.robot_command(robot_cmd)
-        block_until_arm_arrives(self.command_client, cmd_id, 1/self.direct_control_frequency)
+        
+        # block_until_arm_arrives(self.command_client, cmd_id, 1/self.direct_control_frequency)
         
     def stop_direct_control(self):
         self.current_state_direct_control = False

@@ -37,7 +37,7 @@ from spot_fsm_control.arm_impedance_control_helpers import get_root_T_ground_bod
 
 logging.basicConfig(format="[LINE:%(lineno)d] %(levelname)-8s [%(asctime)s]  %(message)s", level=logging.INFO)
 
-DIRECT_CONTROL_FREQUENCY = 6 #Hz
+DIRECT_CONTROL_FREQUENCY = 15 #Hz
 
 
 def try_state_send(state_machine, action):
@@ -81,7 +81,7 @@ class FsmNode:
 
         # Set our tool frame to be the tip of the robot's bottom jaw. Flip the orientation so that
         # when the hand is pointed downwards, the tool's z-axis is pointed upward.
-        self.wr1_T_tool = SE3Pose(0, 0, 0, Quat(1, 0, 0, 0))
+        self.wr1_T_tool = SE3Pose(0, 0, 0, Quat.from_pitch(-math.pi / 2))
         
         self.frequency_pose_count = int(60 // DIRECT_CONTROL_FREQUENCY)
         self.pose_receive_count = 0
@@ -113,9 +113,8 @@ class FsmNode:
                     y = data.orientation.y,
                     z = data.orientation.z
                 )
-                self.robot.init_pos_empty = False
         
-            pos = 8*(np.array([data.position.x, data.position.y, data.position.z] - np.array(self.arm_pos_init)))
+            pos = 1.5*(np.array([data.position.x, data.position.y, data.position.z] - np.array(self.arm_pos_init)))
             
             quaternion = math_helpers.Quat(
                 w = data.orientation.w,
@@ -125,17 +124,18 @@ class FsmNode:
             )
             orientation = math_helpers.Quat()
             
-            hand_pose = math_helpers.SE3Pose(x=pos[0], y=pos[1], z=pos[2], rot=orientation)
-            self.arm_pos_init = [data.position.x, data.position.y, data.position.z]
+            hand_pose = math_helpers.SE3Pose(x=0.75+pos[0], y=pos[1], z=0.45+pos[2], rot=orientation)
+            # print("Hand Pose:", hand_pose)
+            
+            # self.arm_pos_init = [data.position.x, data.position.y, data.position.z]
             
             self.pose_receive_count += 1
             if self.pose_receive_count >= self.frequency_pose_count:
                 self.pose_receive_count = 0
+                self.robot.init_pos_empty = False
                 self.robot.move_to_cartesian_pose_rt_task(hand_pose, self.odom_T_task, self.wr1_T_tool)
-            
-            
-        else:
-            pass
+        
+        # end func
         
     def callback_hand_pose_trajectory(self, data):
         if self.robot.current_state_direct_control:
@@ -149,7 +149,7 @@ class FsmNode:
                 )
                 self.robot.init_pos_empty = False
         
-            pos = 8*(np.array([data.position.x, data.position.y, data.position.z] - np.array(self.arm_pos_init)))
+            pos = 10*(np.array([data.position.x, data.position.y, data.position.z] - np.array(self.arm_pos_init)))
             
             quaternion = math_helpers.Quat(
                 w = data.orientation.w,
@@ -168,7 +168,7 @@ class FsmNode:
             if len(self.direct_control_trajectory_list) >= 12:
                 zero_pose = math_helpers.SE3Pose(x=0, y=0, z=0, rot=math_helpers.Quat())
                 zero_trajectory_pose = trajectory_pb2.SE3TrajectoryPoint(pose=zero_pose.to_proto())
-                print(f"Exextecuting path, total waypoint count {len(self.direct_control_trajectory_list)}")
+                print(f"Executing path, total waypoint count {len(self.direct_control_trajectory_list)}")
                 hand_traj = trajectory_pb2.SE3Trajectory(points=self.direct_control_trajectory_list)
                 
                 zero_pose = math_helpers.SE3Pose(x=0, y=0, z=0, rot=math_helpers.Quat())

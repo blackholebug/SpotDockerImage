@@ -65,18 +65,14 @@ def get_root_T_ground_body(robot_state, root_frame_name):
         root_frame_name = ROOT_FRAME_NAME_DEFAULT
 
     # First, get the gravity-aligned body frame and the ground frames.
-    target_frame = "hand"
-    source_frame = "flat_body"
-    odom_T_flat_body = get_a_tform_b(robot_state.kinematic_state.transforms_snapshot,
-                                        source_frame, target_frame)
     root_T_flat_body = get_a_tform_b(robot_state.kinematic_state.transforms_snapshot,
                                      root_frame_name, GRAV_ALIGNED_BODY_FRAME_NAME)
 
-    root_T_gpe = get_a_tform_b(robot_state.kinematic_state.transforms_snapshot, source_frame,
+    root_T_gpe = get_a_tform_b(robot_state.kinematic_state.transforms_snapshot, root_frame_name,
                                GROUND_PLANE_FRAME_NAME)
 
     # Get the frame on the ground right underneath the center of the body.
-    root_T_ground_body = odom_T_flat_body
+    root_T_ground_body = root_T_flat_body
     root_T_ground_body.z = root_T_gpe.z
     return root_T_ground_body
 
