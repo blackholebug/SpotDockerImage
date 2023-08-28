@@ -23,11 +23,15 @@ from bosdyn.client.robot_state import RobotStateClient
 from bosdyn.client.manipulation_api_client import ManipulationApiClient
 
 from spot_fsm_control.manipulator import ManipulatorFunctions
+from bosdyn.util import seconds_to_duration
+
+from spot_fsm_control.arm_impedance_control_helpers import (apply_force_at_current_position,
+                                           get_impedance_mobility_params, get_root_T_ground_body)
 
 
 class SpotControlInterface(ManipulatorFunctions):
 
-    def __init__(self):
+    def __init__(self, direct_control_frequency):
         # super(SpotControlInterface, self).__init__()
         self.hostname = "192.168.80.3"
         self.command_client = None
@@ -35,6 +39,7 @@ class SpotControlInterface(ManipulatorFunctions):
         self.prev_close_or_open = "close"
         self.direct_control_trajectory_list = []
         self.current_state_direct_control = False
+        self.direct_control_frequency = direct_control_frequency
 
 
     def establish_connection(self):
@@ -126,6 +131,25 @@ class SpotControlInterface(ManipulatorFunctions):
 
         # Wait until the arm arrives at the goal.
         block_until_arm_arrives(self.command_client, cmd_id)
+        
+    def move_to_cartesian_pose_rt_task(self, task_T_desired, root_T_task, wr1_T_tool):
+        robot_cmd = RobotCommandBuilder.synchro_stand_command(params=get_impedance_mobility_params())
+        arm_cart_cmd = robot_cmd.synchronized_command.arm_command.arm_cartesian_command
+
+        # Set up our root frame, task frame, and tool frame.
+        arm_cart_cmd.root_frame_name = ODOM_FRAME_NAME
+        arm_cart_cmd.root_tform_task.CopyFrom(root_T_task.to_proto())
+        arm_cart_cmd.wrist_tform_tool.CopyFrom(wr1_T_tool.to_proto())
+
+        # Do a single point goto to a desired pose in the task frame.
+        cartesian_traj = arm_cart_cmd.pose_trajectory_in_task
+        traj_pt = cartesian_traj.points.add()
+        traj_pt.time_since_reference.CopyFrom(seconds_to_duration(2.0))
+        traj_pt.pose.CopyFrom(task_T_desired.to_proto())
+
+        # Execute the Cartesian command.
+        cmd_id = self.command_client.robot_command(robot_cmd)
+        block_until_arm_arrives(self.command_client, cmd_id, 1/self.direct_control_frequency)
         
     def stop_direct_control(self):
         self.current_state_direct_control = False

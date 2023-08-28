@@ -21,27 +21,34 @@ class GestureClassificationNode:
         self.img_idx = 1
         self.clf = load("/catkin_ws/src/gesture_classification/models/KNN_120.joblib")
         
-    def classify_time_series(self, series):
-        predictions = []
-        for hand in series:
-            hand = np.array(hand).reshape(1, -1)
-            y = self.clf.predict(hand)
-            predictions.append(y[0])
+        self.serie_size = 60
+        self.recognition_frequency = 2 # Hz
+        self.slice_size = int( self.serie_size // self.recognition_frequency )
         
+    def classify_time_series(self, series):
+        hand = np.array(series).reshape(len(series), -1)
+        y = self.clf.predict(hand)
+        predictions = y.tolist()
         sign = max(set(predictions), key=predictions.count)
         print(predictions)
         
         return sign
     
     def callback(self, data):
-        array = np.array(data.data)
+        array = np.array(data.data).reshape(21, 3)
+        rotation_matrix = np.array([[-1,0,0],[0,-1,0],[0,0,1]]) # 180 on z axis
+        array = np.matmul(array, rotation_matrix)
+        array = array.reshape(63)
+        
+        print(array)
+        
         self.hand_keypoint_list.append(array)
         
-        if len(self.hand_keypoint_list) > 60:
+        if len(self.hand_keypoint_list) > self.serie_size:
             series = self.hand_keypoint_list.copy()
-            self.hand_keypoint_list = self.hand_keypoint_list[30:]
+            self.hand_keypoint_list = self.hand_keypoint_list[self.slice_size:]
             gesture = self.classify_time_series(series)
-            print(gesture) ## publisher this gesture
+            print(gesture) # publisher this gesture
 
     def run(self):
         rospy.init_node('listener', anonymous=True)
