@@ -159,8 +159,7 @@ class SpotStateMachine(StateMachine):
         
         self.robot.move_to_cartesian_pose_rt_task(task_T_tool_desired, odom_T_task, wr1_T_tool)
         
-        time.sleep(2)
-        print("GO DIRECT CONTROL")
+        time.sleep(1)
     
         self.robot.init_pos_empty = True
         self.robot.current_state_direct_control = True

@@ -37,7 +37,7 @@ from spot_fsm_control.arm_impedance_control_helpers import get_root_T_ground_bod
 
 logging.basicConfig(format="[LINE:%(lineno)d] %(levelname)-8s [%(asctime)s]  %(message)s", level=logging.INFO)
 
-DIRECT_CONTROL_FREQUENCY = 15 #Hz
+DIRECT_CONTROL_FREQUENCY = 6 #Hz
 
 
 def try_state_send(state_machine, action):
@@ -107,27 +107,10 @@ class FsmNode:
         if self.robot.current_state_direct_control:
             if self.robot.init_pos_empty:
                 self.arm_pos_init = [data.position.x, data.position.y, data.position.z]
-                self.arm_ori_init = math_helpers.Quat(
-                    w = data.orientation.w,
-                    x = data.orientation.x,
-                    y = data.orientation.y,
-                    z = data.orientation.z
-                )
         
-            pos = 1.5*(np.array([data.position.x, data.position.y, data.position.z] - np.array(self.arm_pos_init)))
-            
-            quaternion = math_helpers.Quat(
-                w = data.orientation.w,
-                x = data.orientation.x,
-                y = data.orientation.y,
-                z = data.orientation.z
-            )
-            orientation = math_helpers.Quat()
-            
+            pos = 2*(np.array([data.position.x, data.position.y, data.position.z] - np.array(self.arm_pos_init)))
+            orientation = math_helpers.Quat(1, 0, 0, 0)
             hand_pose = math_helpers.SE3Pose(x=0.75+pos[0], y=pos[1], z=0.45+pos[2], rot=orientation)
-            # print("Hand Pose:", hand_pose)
-            
-            # self.arm_pos_init = [data.position.x, data.position.y, data.position.z]
             
             self.pose_receive_count += 1
             if self.pose_receive_count >= self.frequency_pose_count:
