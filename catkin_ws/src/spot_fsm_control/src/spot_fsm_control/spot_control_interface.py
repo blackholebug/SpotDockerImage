@@ -138,7 +138,7 @@ class SpotControlInterface(ManipulatorFunctions):
         arm_cart_cmd = robot_cmd.synchronized_command.arm_command.arm_cartesian_command
 
         # Set up our root frame, task frame, and tool frame.
-        arm_cart_cmd.root_frame_name = ODOM_FRAME_NAME
+        arm_cart_cmd.root_frame_name = GRAV_ALIGNED_BODY_FRAME_NAME
         arm_cart_cmd.root_tform_task.CopyFrom(root_T_task.to_proto())
         arm_cart_cmd.wrist_tform_tool.CopyFrom(wr1_T_tool.to_proto())
 

@@ -22,7 +22,7 @@ WR1_FRAME_NAME = 'link_wr1'
 EPSILON = 1e-6
 
 # Max stiffnesses for the arm.  Any higher than this is not recommended as the arm can go unstable.
-MAX_K_POS = 500
+MAX_K_POS = 2000
 MAX_K_ROT = 60
 
 # Max damping for the arm.  Any higher than this is not recommended as the arm can go unstable.

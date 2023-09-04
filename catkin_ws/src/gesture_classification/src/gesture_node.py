@@ -6,6 +6,7 @@ from std_msgs.msg import Float32MultiArray
 import numpy as np
 from joblib import load
 from sklearn import preprocessing as pre
+from scipy.spatial.transform import Rotation as R
 
 from gesture_classification.gesture_classification import GestureClassification
 
@@ -37,6 +38,9 @@ class GestureClassificationNode:
         self.icp_translation = np.array([[x,y,z]])
         self.scaler = pre.MinMaxScaler()
         
+        self.icp_rotation = R.from_euler('zx', [90, 20], degrees=True).as_matrix()
+        self.icp_translation = np.array([0.00415112, 0.07200587, 0.49008032])
+        
     def classify_time_series(self, series):
         hand = np.array(series).reshape(len(series), -1)
         y = self.clf.predict(hand)
@@ -48,12 +52,12 @@ class GestureClassificationNode:
     
     def callback(self, data):
         array = np.array(data.data).reshape(21, 3)
-        rotation_matrix = np.array([[-1,0,0],[0,-1,0],[0,0,1]]) # 180 on z axis
-        array = np.matmul(array, rotation_matrix)
-        array = self.scaler.fit_transform(array)
+        # rotation_matrix = np.array([[-1,0,0],[0,-1,0],[0,0,1]]) # 180 on z axis
+        # array = np.matmul(array, rotation_matrix)
+        # array = self.scaler.fit_transform(array)
         
         ## tranformation matrix from ICP result of two hands
-        array = np.matmul(array, self.icp_rotation) + self.icp_translation
+        array = np.matmul(array, self.icp_rotation) - self.icp_translation
         array = array.reshape(63)
         
         self.hand_keypoint_list.append(array)

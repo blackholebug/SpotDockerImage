@@ -77,7 +77,7 @@ class FsmNode:
         
         # Pick a task frame that is beneath the robot body center, on the ground.
         self.odom_T_task = get_root_T_ground_body(robot_state=self.robot.robot_state_client.get_robot_state(),
-                                             root_frame_name=ODOM_FRAME_NAME)
+                                             root_frame_name=GRAV_ALIGNED_BODY_FRAME_NAME)
 
         # Set our tool frame to be the tip of the robot's bottom jaw. Flip the orientation so that
         # when the hand is pointed downwards, the tool's z-axis is pointed upward.
@@ -108,7 +108,7 @@ class FsmNode:
             if self.robot.init_pos_empty:
                 self.arm_pos_init = [data.position.x, data.position.y, data.position.z]
         
-            pos = 2*(np.array([data.position.x, data.position.y, data.position.z] - np.array(self.arm_pos_init)))
+            pos = 1.0*(np.array([data.position.x, data.position.y, data.position.z] - np.array(self.arm_pos_init)))
             orientation = math_helpers.Quat(1, 0, 0, 0)
             hand_pose = math_helpers.SE3Pose(x=0.75+pos[0], y=pos[1], z=0.45+pos[2], rot=orientation)
             
@@ -188,7 +188,7 @@ if __name__ == "__main__":
     
     if robotInterface:
         sdk = bosdyn.client.create_standard_sdk('SpotControlInterface')
-        robot = sdk.create_robot("192.168.51.157")
+        robot = sdk.create_robot("192.168.61.157")
         bosdyn.client.util.authenticate(robot)
         robot.time_sync.wait_for_sync()
         assert not robot.is_estopped(), "Robot is estopped. Please use an external E-Stop client, " \
