@@ -37,7 +37,7 @@ from spot_fsm_control.arm_impedance_control_helpers import get_root_T_ground_bod
 
 logging.basicConfig(format="[LINE:%(lineno)d] %(levelname)-8s [%(asctime)s]  %(message)s", level=logging.INFO)
 
-DIRECT_CONTROL_FREQUENCY = 6 #Hz
+DIRECT_CONTROL_FREQUENCY = 15 #Hz Max 60,
 
 
 def try_state_send(state_machine, action):
@@ -114,6 +114,7 @@ class FsmNode:
             
             self.pose_receive_count += 1
             if self.pose_receive_count >= self.frequency_pose_count:
+                print(hand_pose)
                 self.pose_receive_count = 0
                 self.robot.init_pos_empty = False
                 self.robot.move_to_cartesian_pose_rt_task(hand_pose, self.odom_T_task, self.wr1_T_tool)
@@ -194,6 +195,7 @@ if __name__ == "__main__":
                                         "such as the estop SDK example, to configure E-Stop."
         
         lease_client = robot.ensure_client(bosdyn.client.lease.LeaseClient.default_service_name)
+        lease_client.take()
         with bosdyn.client.lease.LeaseKeepAlive(lease_client, must_acquire=True, return_at_exit=True):
             # Now, we are ready to power on the robot. This call will block until the power
             # is on. Commands would fail if this did not happen. We can also check that the robot is

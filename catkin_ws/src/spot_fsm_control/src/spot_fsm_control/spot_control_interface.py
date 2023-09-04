@@ -100,7 +100,8 @@ class SpotControlInterface(ManipulatorFunctions):
             cmd = RobotCommandBuilder.claw_gripper_open_command()
             self.command_client.robot_command(cmd)
         elif close_or_open == "close":
-            cmd = RobotCommandBuilder.claw_gripper_close_command()
+            # rubber tomato 0.375
+            cmd = RobotCommandBuilder.claw_gripper_open_fraction_command(0.375)
             self.command_client.robot_command(cmd)
         self.prev_close_or_open = close_or_open
             
@@ -161,7 +162,7 @@ class SpotControlInterface(ManipulatorFunctions):
             cmd = RobotCommandBuilder.arm_stow_command()
         else:
             cmd = RobotCommandBuilder.arm_ready_command()
-        cmd_id = self.command_client.robot_command(cmd)
+        cmd_id = self.command_client.robot_command(cmd) 
         block_until_arm_arrives(self.command_client, cmd_id)
 
     def keyboard_movement_control(self):
