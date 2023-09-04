@@ -35,6 +35,7 @@ class GestureClassificationNode:
         y = H[1,3]
         z = H[2,3]
         self.icp_translation = np.array([[x,y,z]])
+        self.scaler = pre.MinMaxScaler()
         
     def classify_time_series(self, series):
         hand = np.array(series).reshape(len(series), -1)
@@ -52,7 +53,7 @@ class GestureClassificationNode:
         
         ## tranformation matrix from ICP result of two hands
         
-        array = pre.MinMaxScaler().fit_transform(array)
+        array = self.scaler.fit_transform(array)
         array = np.matmul(array, self.icp_rotation) + self.icp_translation
         array = array.reshape(63)
         
