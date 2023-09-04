@@ -24,7 +24,7 @@ class GestureClassificationNode:
         self.hand_keypoint_list = []
         self.model = GestureClassification()
         self.img_idx = 1
-        self.clf = load("/catkin_ws/src/gesture_classification/models/KNN_120.joblib")
+        self.clf = load("/catkin_ws/src/gesture_classification/models/KNN_250.joblib")
         
         self.serie_size = 60
         self.recognition_frequency = 2 # Hz
@@ -50,10 +50,9 @@ class GestureClassificationNode:
         array = np.array(data.data).reshape(21, 3)
         rotation_matrix = np.array([[-1,0,0],[0,-1,0],[0,0,1]]) # 180 on z axis
         array = np.matmul(array, rotation_matrix)
+        array = self.scaler.fit_transform(array)
         
         ## tranformation matrix from ICP result of two hands
-        
-        array = self.scaler.fit_transform(array)
         array = np.matmul(array, self.icp_rotation) + self.icp_translation
         array = array.reshape(63)
         
