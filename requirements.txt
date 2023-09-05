@@ -21,5 +21,6 @@ python-dotenv
 python-statemachine
 matplotlib
 scikit-learn
+opencv-python
 # rospy
 # omegaconf

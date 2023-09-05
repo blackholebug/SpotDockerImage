@@ -7,7 +7,7 @@ import numpy as np
 from joblib import load
 from sklearn import preprocessing as pre
 from scipy.spatial.transform import Rotation as R
-
+import cv2
 from gesture_classification.gesture_classification import GestureClassification
 
 H = np.array([[   -0.325277,     0.330760,     0.885885,     0.669114],
@@ -67,11 +67,21 @@ class GestureClassificationNode:
             self.hand_keypoint_list = self.hand_keypoint_list[self.slice_size:]
             gesture = self.classify_time_series(series)
             print(gesture) # publisher this gesture
+            
+            
+    def callback_image(self, data):
+        array = np.array(data.data)
+        frame = cv2.resize(array, None, fx=1, fy=1, interpolation=cv2.INTER_AREA)
+        cv2.imshow('Input', frame)
+    
 
     def run(self):
         rospy.init_node('listener', anonymous=True)
         rospy.Subscriber("hand_keypoints", Float32MultiArray, self.callback)
+        rospy.Subscriber("image_hololens", Float32MultiArray, self.callback_image)
         rospy.spin()
+        
+        cv2.destroyAllWindows()
 
 
 if __name__ == "__main__":
