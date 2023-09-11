@@ -1,4 +1,5 @@
-cd ./catkin_ws
+echo "docker CP works! #2"
+cd /catkin_ws
 catkin_make
 source devel/setup.bash
 

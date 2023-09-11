@@ -91,14 +91,16 @@ class FsmNode:
         if data.data == "stop_action" and self.robot.current_state_direct_control:
             self.robot.stop_direct_control()
             self.robot.current_state_direct_control = False
-        try_state_send(self.sm, data.data)
+            try_state_send(self.sm, data.data)
+        elif self.robot_current_state_direct_control:
+            pass
+        else:
+            try_state_send(self.sm, data.data)
         
     def callback_gripper(self, data):
         if self.robot.current_state_direct_control:
-            print(data)
             close_or_open = data.data
             self.robot.gripper(close_or_open)
-            # time.sleep(1)
         else:
             pass
         

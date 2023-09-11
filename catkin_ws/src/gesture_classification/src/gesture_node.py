@@ -2,18 +2,13 @@
 
 import time
 import rospy
-from std_msgs.msg import Float32MultiArray
+from std_msgs.msg import Float32MultiArray, String
 import numpy as np
 from joblib import load
 from sklearn import preprocessing as pre
 from scipy.spatial.transform import Rotation as R
-import cv2
-from gesture_classification.gesture_classification import GestureClassification
-
-H = np.array([[   -0.325277,     0.330760,     0.885885,     0.669114],
-              [   -0.759489,    -0.649503,    -0.036364,     1.308348],
-              [    0.563357,    -0.684649,     0.462477,     0.248948],
-              [    0.000000,     0.000000,     0.000000,     1.000000]])
+import json
+from datetime import datetime
 
 class GestureClassificationNode:
     """_summary_
@@ -23,23 +18,40 @@ class GestureClassificationNode:
     
     def __init__(self):
         self.hand_keypoint_list = []
-        self.model = GestureClassification()
         self.img_idx = 1
-        self.clf = load("/catkin_ws/src/gesture_classification/models/KNN_250.joblib")
+        self.clf = load("/catkin_ws/src/gesture_classification/models/SVM.joblib")
+        
+        self.incoming_gestures = []
+        self.pub = rospy.Publisher('chatter', String)
+
         
         self.serie_size = 60
         self.recognition_frequency = 2 # Hz
         self.slice_size = int( self.serie_size // self.recognition_frequency )
         
-        self.icp_rotation = H[:3, :3]
-        x = H[0,3]
-        y = H[1,3]
-        z = H[2,3]
-        self.icp_translation = np.array([[x,y,z]])
-        self.scaler = pre.MinMaxScaler()
-        
-        self.icp_rotation = R.from_euler('zx', [90, 20], degrees=True).as_matrix()
-        self.icp_translation = np.array([0.00415112, 0.07200587, 0.49008032])
+        self.keypoint_dictionary = {}
+        self.i = 0
+        self.signs = [
+            "call",
+            "dislike",
+            "fist",
+            "four", 
+            "like", 
+            "mute",
+            "ok", 
+            "one",
+            "palm", 
+            "peace",
+            "peace inverted", 
+            "rock", 
+            "stop",
+            "stop inverted",
+            "three",
+            "three 2",
+            "two up",
+            "two up inverted",
+        ]
+        self.total_signs_to_record = len(self.signs) * 3
         
     def classify_time_series(self, series):
         hand = np.array(series).reshape(len(series), -1)
@@ -51,15 +63,18 @@ class GestureClassificationNode:
         return sign
     
     def callback(self, data):
-        array = np.array(data.data).reshape(21, 3)
-        # rotation_matrix = np.array([[-1,0,0],[0,-1,0],[0,0,1]]) # 180 on z axis
-        # array = np.matmul(array, rotation_matrix)
-        # array = self.scaler.fit_transform(array)
+        self.incoming_gestures.appemnd(data.data)
         
-        ## tranformation matrix from ICP result of two hands
-        array = np.matmul(array, self.icp_rotation) - self.icp_translation
-        array = array.reshape(63)
+        if len(self.incoming_gestures) >= 60:
+            list_to_classify = self.incoming_gestures.copy()
+            self.incoming_gestures = []
+            action = max(set(list_to_classify), key=list_to_classify.count)
+            self.pub.publish(action)
         
+        
+    
+    def callback_keypoints(self, data):
+        array = np.array(data.data)
         self.hand_keypoint_list.append(array)
         
         if len(self.hand_keypoint_list) > self.serie_size:
@@ -69,19 +84,52 @@ class GestureClassificationNode:
             print(gesture) # publisher this gesture
             
             
-    def callback_image(self, data):
-        array = np.array(data.data)
-        frame = cv2.resize(array, None, fx=1, fy=1, interpolation=cv2.INTER_AREA)
-        cv2.imshow('Input', frame)
+    def callback_save_pose(self, data):
+        array = np.array(data.data).reshape(21, 3)
+        keypoints = array.tolist()
+        
+        
+        if self.i >= self.total_signs_to_record:
+            sign = "no gesture"
+        else:
+            sign = self.signs[int(self.i // 3)]
+        
+        if (int(self.i % 3) == 0) and (sign != "no gesture"):
+            self.keypoint_dictionary[sign] = {}  
+        elif self.i == self.total_signs_to_record:
+            self.keypoint_dictionary[sign] = {}
+
+        print(f"{sign} #{int(self.i % 3)+1}")
+        self.keypoint_dictionary[sign][self.i] = {}
+        self.keypoint_dictionary[sign][self.i]["keypoints"] = keypoints
+        self.keypoint_dictionary[sign][self.i]["labels"] = [sign]
+        self.keypoint_dictionary[sign][self.i]["leading_hand"] = "right"
+        self.keypoint_dictionary[sign][self.i]["hand_order"] = ["Right"]
+        self.keypoint_dictionary[sign][self.i]["number_of_hands_detected"] = 1
+
+
+        self.i += 1
+        
+        date_time = datetime.now().strftime("%m-%d-%Y-%H:%M:%S")
+        with open(f"/catkin_ws/P05-{date_time}.json", "w") as outfile:
+            json.dump(self.keypoint_dictionary, outfile)
     
 
     def run(self):
+        date_time = datetime.now().strftime("%m-%d-%Y-%H:%M:%S")
+        with open(f"/catkin_ws/P05-{date_time}.json", "w") as outfile:
+            json.dump(self.keypoint_dictionary, outfile)
         rospy.init_node('listener', anonymous=True)
-        rospy.Subscriber("hand_keypoints", Float32MultiArray, self.callback)
-        rospy.Subscriber("image_hololens", Float32MultiArray, self.callback_image)
+        
+        rospy.Subscriber("gesture_recognition", String, self.callback)
+        # rospy.Subscriber("hand_keypoints", Float32MultiArray, self.callback_keypoints)
+        # rospy.Subscriber("hand_keypoints", Float32MultiArray, self.callback_save_pose)
         rospy.spin()
         
-        cv2.destroyAllWindows()
+        date_time = datetime.now().strftime("%m-%d-%Y-%H:%M:%S")
+        with open(f"/catkin_ws/P05-{date_time}.json", "w") as outfile:
+            json.dump(self.keypoint_dictionary, outfile)
+            
 
 
 if __name__ == "__main__":
