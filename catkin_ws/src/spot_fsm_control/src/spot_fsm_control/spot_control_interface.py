@@ -81,7 +81,7 @@ class SpotControlInterface(ManipulatorFunctions):
 
     def move_command(self, duration=1):
         print("Move:", self.forward, self.strafe, self.rotate)
-        cmd = RobotCommandBuilder.velocity_command(self.forward, self.strafe, self.rotate)
+        cmd = RobotCommandBuilder.synchro_velocity_command(self.forward, self.strafe, self.rotate)
         self.command_client.robot_command(cmd, end_time_secs=time.time() + duration) # robot_command_async
         self.forward, self.strafe, self.rotate = 0, 0, 0
 

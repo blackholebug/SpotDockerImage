@@ -22,10 +22,9 @@ class GestureClassificationNode:
         self.clf = load("/catkin_ws/src/gesture_classification/models/SVM.joblib")
         
         self.incoming_gestures = []
-        self.pub = rospy.Publisher('chatter', String)
-
-        
+        self.pub = rospy.Publisher('chatter', String, queue_size=60)
         self.serie_size = 60
+        
         self.recognition_frequency = 2 # Hz
         self.slice_size = int( self.serie_size // self.recognition_frequency )
         
@@ -63,13 +62,18 @@ class GestureClassificationNode:
         return sign
     
     def callback(self, data):
-        self.incoming_gestures.appemnd(data.data)
+        self.incoming_gestures.append(data.data)
         
-        if len(self.incoming_gestures) >= 60:
+        if len(self.incoming_gestures) >= self.serie_size:
             list_to_classify = self.incoming_gestures.copy()
-            self.incoming_gestures = []
+            self.incoming_gestures = self.incoming_gesture[30:]
             action = max(set(list_to_classify), key=list_to_classify.count)
-            self.pub.publish(action)
+            count_action = list_to_classify.count(action)
+            if count_action > int(self.serie_size*0.66667):
+                if action == "no gesture":
+                    pass
+                else:
+                    self.pub.publish(action)
         
         
     

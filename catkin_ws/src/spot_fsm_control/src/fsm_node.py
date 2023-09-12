@@ -92,7 +92,7 @@ class FsmNode:
             self.robot.stop_direct_control()
             self.robot.current_state_direct_control = False
             try_state_send(self.sm, data.data)
-        elif self.robot_current_state_direct_control:
+        elif self.robot.current_state_direct_control:
             pass
         else:
             try_state_send(self.sm, data.data)

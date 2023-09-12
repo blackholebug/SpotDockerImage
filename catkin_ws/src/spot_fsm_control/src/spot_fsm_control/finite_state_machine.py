@@ -81,6 +81,8 @@ class SpotStateMachine(StateMachine):
     def __init__(self, robot):
         self.robot = robot
         super().__init__()
+        self.robot_speed = 0.2
+        self.movement_duration = 1
         
     def after_stop_action(self):
         self.robot.stop()
@@ -88,13 +90,13 @@ class SpotStateMachine(StateMachine):
         print("Action stopped.")
         
     def on_enter_walk_forward(self):
-        self.robot.forward = 0.4
-        self.robot.move_command(duration=2)
+        self.robot.forward = self.robot_speed
+        self.robot.move_command(duration=self.movement_duration)
         print("move forward")
 
     def on_enter_walk_backward(self):
-        self.robot.forward = -0.4
-        self.robot.move_command(duration=2)
+        self.robot.forward = -1 * self.robot_speed
+        self.robot.move_command(duration=self.movement_duration)
         print("move backward")
 
     def on_enter_stop_walk(self):
@@ -102,23 +104,23 @@ class SpotStateMachine(StateMachine):
         print("Stop")
 
     def on_enter_turn_left(self):
-        self.robot.rotate = 0.2
-        self.robot.move_command(duration=2)
+        self.robot.rotate = self.robot_speed
+        self.robot.move_command(duration=self.movement_duration)
         print("Rotate left")
 
     def on_enter_turn_right(self):
-        self.robot.rotate = -0.2
-        self.robot.move_command(duration=2)
+        self.robot.rotate = -1 * self.robot_speed
+        self.robot.move_command(duration=self.movement_duration)
         print("Rotate right")
 
     def on_enter_walk_left(self):
-        self.robot.strafe = 0.2
-        self.robot.move_command(duration=2)
+        self.robot.strafe = self.robot_speed
+        self.robot.move_command(duration=self.movement_duration)
         print("Move left")
 
     def on_enter_walk_right(self):
-        self.robot.strafe = -0.2
-        self.robot.move_command(duration=2)
+        self.robot.strafe = -1 * self.robot_speed
+        self.robot.move_command(duration=self.movement_duration)
         print("Move right")
 
     def on_exit_arm_trajectory(self):
