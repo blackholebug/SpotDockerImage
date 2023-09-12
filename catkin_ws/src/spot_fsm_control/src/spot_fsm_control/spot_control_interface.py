@@ -67,8 +67,6 @@ class SpotControlInterface(ManipulatorFunctions):
             self.robot_state_client = robot.ensure_client(RobotStateClient.default_service_name)
             self.manipulation_api_client = robot.ensure_client(ManipulationApiClient.default_service_name)
 
-            # self.gaze_control()
-
     def stop(self):
         cmd = RobotCommandBuilder.stop_command()
         self.command_client.robot_command(cmd)
