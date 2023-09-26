@@ -230,7 +230,7 @@ class FsmNode:
     def run(self):
         rospy.init_node('listener', anonymous=True)
         rospy.Subscriber("chatter", String, self.callback_action)
-        rospy.Subscriber("gripper", String, self.callback_gripper)3
+        rospy.Subscriber("gripper", String, self.callback_gripper)
         rospy.Subscriber("hand_pose", Pose, self.callback_hand_pose)
         rospy.Subscriber("robot_pose", Float32MultiArray, self.callback_tracker_pose)
         # rospy.Subscriber("deictic_pick_up", Pose, self.callback_deictic_pickup)
