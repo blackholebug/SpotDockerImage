@@ -2,6 +2,8 @@
 catkin_ws/build
 catkin_ws/devel
 
+triad_openvr
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

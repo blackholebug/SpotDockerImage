@@ -101,7 +101,7 @@ def arm_object_grasp(config):
                     traj_feedback.body_movement_status == traj_feedback.BODY_STATUS_SETTLED):
                 print('Arrived at the goal.')
                 break
-            time.sleep(1)
+            time.sleep(0.2)
 
         # Take a picture with a camera
         robot.logger.info('Getting an image from: %s', config.image_source)

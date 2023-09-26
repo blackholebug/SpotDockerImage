@@ -4,8 +4,10 @@
 # is subject to the terms and conditions of the Boston Dynamics Software
 # Development Kit License (20191101-BDSDK-SL).
 
-"""Tutorial to show how to use Spot's arm.
 """
+Tutorial to show how to use Spot's arm.
+"""
+
 import argparse
 import sys
 import time

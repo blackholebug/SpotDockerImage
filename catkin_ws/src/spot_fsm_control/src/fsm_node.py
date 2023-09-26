@@ -7,7 +7,7 @@ sys.path.append("./src/")
 
 import math
 import rospy
-from std_msgs.msg import String
+from std_msgs.msg import String, Float32MultiArray
 from geometry_msgs.msg import Pose
 import ast
 import numpy as np
@@ -34,6 +34,7 @@ from bosdyn.client.manipulation_api_client import ManipulationApiClient
 from spot_fsm_control.spot_control_interface import SpotControlInterface
 from spot_fsm_control.finite_state_machine import SpotStateMachine
 from spot_fsm_control.arm_impedance_control_helpers import get_root_T_ground_body
+from spot_fsm_control import triad_openvr
 
 logging.basicConfig(format="[LINE:%(lineno)d] %(levelname)-8s [%(asctime)s]  %(message)s", level=logging.INFO)
 
@@ -66,7 +67,6 @@ class FsmNode:
 
     def __init__(self, robot: SpotControlInterface):
         self.robot = robot
-        self.robot.init_pos_empty = False
         self.sm = SpotStateMachine(robot=robot)
         self.arm_pos_init = [0, 0, 0]
         self.arm_ori_init = [1, 0, 0, 0]
@@ -76,8 +76,9 @@ class FsmNode:
         
         
         # Pick a task frame that is beneath the robot body center, on the ground.
-        self.odom_T_task = get_root_T_ground_body(robot_state=self.robot.robot_state_client.get_robot_state(),
-                                             root_frame_name=GRAV_ALIGNED_BODY_FRAME_NAME)
+        if robot:
+            self.odom_T_task = get_root_T_ground_body(robot_state=self.robot.robot_state_client.get_robot_state(),
+                                                root_frame_name=GRAV_ALIGNED_BODY_FRAME_NAME)
 
         # Set our tool frame to be the tip of the robot's bottom jaw. Flip the orientation so that
         # when the hand is pointed downwards, the tool's z-axis is pointed upward.
@@ -85,6 +86,10 @@ class FsmNode:
         
         self.frequency_pose_count = int(60 // DIRECT_CONTROL_FREQUENCY)
         self.pose_receive_count = 0
+        
+        
+        ## HTC tracker pose init
+        self.pose = [0,0,0,0,0,0]
             
     def callback_action(self, data):
         print(f"\nI heard: {data.data}")
@@ -174,19 +179,71 @@ class FsmNode:
             
         else:
             pass
+        
+    def triangulate_position(self, data):
+        pose = self.pose
+        
+        x_person = data.data[0]
+        y_person = data.data[1]
+        
+        x_obj = data.data[3]
+        y_obj = data.data[4]
+        
+        yaw_robot = pose[3]
+        
+        vector_person_robot = np.array([pose[0] - x_person, pose[1] - y_person])
+        vector_person_object = np.array([x_obj - x_person, y_obj - y_person])
+        vector_robot_object = vector_person_object - vector_person_robot
+        
+        rotation = np.arctan(vector_robot_object[0]/vector_robot_object[1]) - yaw_robot
+        
+        return vector_robot_object[0], vector_robot_object[1], rotation
+        
+    def callback_tracker_pose(self, data):
+        print(f"Tracker pose: {data.data}")
+        self.pose = data.data
+        
+    def callback_deictic_pickup(self, data):
+        x, y, yaw = self.triangulate_position(data)
+        print("Walking to x:{x}, y:{y}, angle:{yaw}")
+        self.robot.two_d_location_body_frame_command(x, y, yaw)
+        
+        self.pick_up_object_in_front_of_robot()
+        
+        return
+    
+    def callback_deictic_dropoff(self, data):
+        x, y, yaw = self.triangulate_position(data)
+        print("Walking to x:{x}, y:{y}, angle:{yaw}")
+        self.robot.two_d_location_body_frame_command(x, y, yaw)
+        
+        self.drop_off_object_in_front_of_robot()
+        
+        return
+    
+    def callback_deictic_walk(self, data):
+        x, y, yaw = self.triangulate_position(data)
+        print("Walking to x:{x}, y:{y}, angle:{yaw}")
+        self.robot.two_d_location_body_frame_command(x, y, yaw)
+        
+        return
     
     def run(self):
         rospy.init_node('listener', anonymous=True)
-        rospy.Subscriber("chatter", String, self.callback_action)
-        rospy.Subscriber("gripper", String, self.callback_gripper)
-        rospy.Subscriber("hand_pose", Pose, self.callback_hand_pose)
+        # rospy.Subscriber("chatter", String, self.callback_action)
+        # rospy.Subscriber("gripper", String, self.callback_gripper)
+        # rospy.Subscriber("hand_pose", Pose, self.callback_hand_pose)
+        rospy.Subscriber("robot_pose", Float32MultiArray, self.callback_tracker_pose)
+        # rospy.Subscriber("deictic_pick_up", Pose, self.callback_deictic_pickup)
+        # rospy.Subscriber("deictic_drop_off", Pose, self.callback_deictic_dropoff)
+        # rospy.Subscriber("deictic_walk", Pose, self.callback_deictic_walk)
         rospy.spin()
 
 
 if __name__ == "__main__":
 
-    robotInterface = SpotControlInterface(DIRECT_CONTROL_FREQUENCY)
-    # robotInterface = None
+    # robotInterface = SpotControlInterface(DIRECT_CONTROL_FREQUENCY)
+    robotInterface = None
     
     if robotInterface:
         sdk = bosdyn.client.create_standard_sdk('SpotControlInterface')
