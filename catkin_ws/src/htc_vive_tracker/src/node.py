@@ -21,12 +21,19 @@ class HTCViveTrackerNode:
     def run(self):
         rate = rospy.Rate(1)
         while True:
-            pose = self.vive_tracker.devices["tracker_1"].get_pose_euler()
-            msg = Float32MultiArray()
-            msg.data = pose
-            print(f"\rPose: {pose}", end="")
-            self.pub.publish(msg)
-            rate.sleep()
+            try:
+                try:
+                    pose = self.vive_tracker.devices["tracker_1"].get_pose_euler()
+                    msg = Float32MultiArray()
+                    msg.data = pose
+                    self.pub.publish(msg)
+                    rate.sleep()
+                    
+                except:
+                    rate.sleep()
+                    continue
+            except KeyboardInterrupt:
+                break
 
         
 

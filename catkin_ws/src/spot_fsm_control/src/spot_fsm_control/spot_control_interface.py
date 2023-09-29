@@ -43,32 +43,7 @@ class SpotControlInterface(ManipulatorFunctions):
         self.current_state_direct_control = False
         self.direct_control_frequency = direct_control_frequency
         self.init_pos_empty = False
-
-
-    def establish_connection(self):
-        sdk = bosdyn.client.create_standard_sdk('SpotControlInterface')
-        self.robot = sdk.create_robot(self.hostname)
-        bosdyn.client.util.authenticate(self.robot)
-        self.robot.time_sync.wait_for_sync()
-        assert not self.robot.is_estopped(), "Robot is estopped. Please use an external E-Stop client, " \
-                                        "such as the estop SDK example, to configure E-Stop."
         
-        lease_client = self.robot.ensure_client(bosdyn.client.lease.LeaseClient.default_service_name)
-        with bosdyn.client.lease.LeaseKeepAlive(lease_client, must_acquire=True, return_at_exit=True):
-            # Now, we are ready to power on the robot. This call will block until the power
-            # is on. Commands would fail if this did not happen. We can also check that the robot is
-            # powered at any point.
-            self.robot.logger.info("Powering on robot... This may take several seconds.")
-            self.robot.power_on(timeout_sec=20)
-            assert self.robot.is_powered_on(), "Robot power on failed."
-            self.robot.logger.info("Robot powered on.")
-
-            self.image_client = self.robot.ensure_client(ImageClient.default_service_name)
-
-            # Create a command client to be able to command the robot
-            self.command_client = self.robot.ensure_client(RobotCommandClient.default_service_name)
-            self.robot_state_client = self.robot.ensure_client(RobotStateClient.default_service_name)
-            self.manipulation_api_client = self.robot.ensure_client(ManipulationApiClient.default_service_name)
 
     def stop(self):
         cmd = RobotCommandBuilder.stop_command()
@@ -97,7 +72,7 @@ class SpotControlInterface(ManipulatorFunctions):
         self.command_client.robot_command(cmd)
         
     def two_d_location_body_frame_command(self, x, y, yaw):
-        trajectory_command = RobotCommandBuilder.synchro_trajectory_command_in_body_frame(x, y, yaw, self.robot.get_frame_tree_snapshot())
+        trajectory_command = RobotCommandBuilder.synchro_trajectory_command_in_body_frame(x, y, yaw, self.robot_sdk.get_frame_tree_snapshot())
         cmd_id = self.command_client.robot_command(trajectory_command, end_time_secs=time.time()+10)
         
         while True:
@@ -163,11 +138,11 @@ class SpotControlInterface(ManipulatorFunctions):
         self.ready_or_stow_arm()
         
         task_T_tool_desired = math_helpers.SE3Pose(0.75, 0, 0.45, math_helpers.Quat(1, 0, 0, 0))
-        odom_T_task = get_root_T_ground_body(robot_state=self.robot.robot_state_client.get_robot_state(),
+        odom_T_task = get_root_T_ground_body(robot_state=self.robot_sdk.robot_state_client.get_robot_state(),
                                              root_frame_name=GRAV_ALIGNED_BODY_FRAME_NAME)
         wr1_T_tool = math_helpers.SE3Pose(0, 0, 0, math_helpers.Quat.from_pitch(-math.pi / 2))
         
-        self.robot.move_to_cartesian_pose_rt_task(task_T_tool_desired, odom_T_task, wr1_T_tool)
+        self.robot_sdk.move_to_cartesian_pose_rt_task(task_T_tool_desired, odom_T_task, wr1_T_tool)
         
         time.sleep(2)
         

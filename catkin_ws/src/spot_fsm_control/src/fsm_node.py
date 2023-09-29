@@ -34,7 +34,6 @@ from bosdyn.client.manipulation_api_client import ManipulationApiClient
 from spot_fsm_control.spot_control_interface import SpotControlInterface
 from spot_fsm_control.finite_state_machine import SpotStateMachine
 from spot_fsm_control.arm_impedance_control_helpers import get_root_T_ground_body
-from spot_fsm_control import triad_openvr
 
 logging.basicConfig(format="[LINE:%(lineno)d] %(levelname)-8s [%(asctime)s]  %(message)s", level=logging.INFO)
 
@@ -65,8 +64,9 @@ def try_state_send(state_machine, action):
 
 class FsmNode:
 
-    def __init__(self, robot: SpotControlInterface):
+    def __init__(self, robot: SpotControlInterface, robot_sdk):
         self.robot = robot
+        self.robot_sdk = robot_sdk
         self.sm = SpotStateMachine(robot=robot)
         self.arm_pos_init = [0, 0, 0]
         self.arm_ori_init = [1, 0, 0, 0]
@@ -87,9 +87,12 @@ class FsmNode:
         self.frequency_pose_count = int(60 // DIRECT_CONTROL_FREQUENCY)
         self.pose_receive_count = 0
         
-        
         ## HTC tracker pose init
-        self.pose = [0,0,0,0,0,0]
+        self.pose = np.array([0, 0, 0, 0, 0, 0])
+        self.initial_position_htc_vive_tracker = np.array([0, 0, 0, 0, 0, 0])
+        self.start_position_offset = np.array([1, 0, 0, 0, 0, 0])
+        self.correction_pose_robot = np.array([1, 0, 0, 0, 0, 0])
+        self.initial_position_htc_vive_trackerr_received = True
             
     def callback_action(self, data):
         print(f"\nI heard: {data.data}")
@@ -191,63 +194,70 @@ class FsmNode:
         
         yaw_robot = pose[3]
         
-        vector_person_robot = np.array([pose[0] - x_person, pose[1] - y_person])
+        vector_person_robot = np.array([pose[0] - x_person, pose[2] - y_person])
         vector_person_object = np.array([x_obj - x_person, y_obj - y_person])
         vector_robot_object = vector_person_object - vector_person_robot
         
-        rotation = np.arctan(vector_robot_object[0]/vector_robot_object[1]) - yaw_robot
+        print("Vector person --> Robot:", vector_person_robot)
+        print("Vector person --> Object:", vector_person_object)
+        
+        rotation = np.arctan(vector_robot_object[1]/vector_robot_object[0]) - np.radians(yaw_robot)        
         
         return vector_robot_object[0], vector_robot_object[1], rotation
         
     def callback_tracker_pose(self, data):
-        print(f"Tracker pose: {data.data}")
-        self.pose = data.data
+        if self.initial_position_htc_vive_trackerr_received:
+            self.initial_position_htc_vive_tracker = np.array(data.data)
+            self.initial_position_htc_vive_trackerr_received = False
+            self.correction_pose_robot = self.start_position_offset - self.initial_position_htc_vive_tracker
+            print(f"Initial Vive Tracker Position: {self.initial_position_htc_vive_tracker}")
+            print(f"Correction Position: {self.correction_pose_robot}")
+        
+        # Something also to do with yaw of the robot
+        self.pose = np.array(data.data) + self.correction_pose_robot
         
     def callback_deictic_pickup(self, data):
         x, y, yaw = self.triangulate_position(data)
-        print("Walking to x:{x}, y:{y}, angle:{yaw}")
+        print(f"Walking to x:{x}, y:{y}, angle:{yaw}")
         self.robot.two_d_location_body_frame_command(x, y, yaw)
         
         self.pick_up_object_in_front_of_robot()
-        
-        return
     
     def callback_deictic_dropoff(self, data):
         x, y, yaw = self.triangulate_position(data)
-        print("Walking to x:{x}, y:{y}, angle:{yaw}")
+        print(f"Walking to x:{x}, y:{y}, angle:{yaw}")
         self.robot.two_d_location_body_frame_command(x, y, yaw)
         
         self.drop_off_object_in_front_of_robot()
         
-        return
     
     def callback_deictic_walk(self, data):
         x, y, yaw = self.triangulate_position(data)
-        print("Walking to x:{x}, y:{y}, angle:{yaw}")
+        print(f"Walking to x:{x}, y:{y}, angle:{yaw}")
         self.robot.two_d_location_body_frame_command(x, y, yaw)
         
-        return
     
     def run(self):
         rospy.init_node('listener', anonymous=True)
-        # rospy.Subscriber("chatter", String, self.callback_action)
+        rospy.Subscriber("chatter", String, self.callback_action)
         # rospy.Subscriber("gripper", String, self.callback_gripper)
         # rospy.Subscriber("hand_pose", Pose, self.callback_hand_pose)
         rospy.Subscriber("robot_pose", Float32MultiArray, self.callback_tracker_pose)
         # rospy.Subscriber("deictic_pick_up", Pose, self.callback_deictic_pickup)
         # rospy.Subscriber("deictic_drop_off", Pose, self.callback_deictic_dropoff)
-        # rospy.Subscriber("deictic_walk", Pose, self.callback_deictic_walk)
+        rospy.Subscriber("deictic_walk", Float32MultiArray, self.callback_deictic_walk)
         rospy.spin()
-
+        
 
 if __name__ == "__main__":
 
-    # robotInterface = SpotControlInterface(DIRECT_CONTROL_FREQUENCY)
-    robotInterface = None
+    robotInterface = SpotControlInterface(DIRECT_CONTROL_FREQUENCY)
+    # robotInterface = None
     
     if robotInterface:
         sdk = bosdyn.client.create_standard_sdk('SpotControlInterface')
         robot = sdk.create_robot("192.168.61.157")
+        robotInterface.robot_sdk = robot
         bosdyn.client.util.authenticate(robot)
         robot.time_sync.wait_for_sync()
         assert not robot.is_estopped(), "Robot is estopped. Please use an external E-Stop client, " \
@@ -274,7 +284,7 @@ if __name__ == "__main__":
             robotInterface.stand(0.0)
             time.sleep(1)
 
-            fsm = FsmNode(robot=robotInterface) 
+            fsm = FsmNode(robot=robotInterface, robot_sdk=robot) 
             fsm.run()
     else:
         fsm = FsmNode(robot=robotInterface) 

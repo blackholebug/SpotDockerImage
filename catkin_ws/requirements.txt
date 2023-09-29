@@ -24,3 +24,5 @@ omegaconf
 scikit-learn
 opencv-python
 openvr
+matplotlib
+tk-tools
