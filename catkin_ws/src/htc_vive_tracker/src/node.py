@@ -15,25 +15,26 @@ class HTCViveTrackerNode:
         self.vive_tracker = triad_openvr.triad_openvr()
         self.vive_tracker.print_discovered_objects()
         
-        self.pub = rospy.Publisher('robot_pose', Float32MultiArray, queue_size=100)
+        self.pub = rospy.Publisher('robot_pose', Float32MultiArray, queue_size=3)
         rospy.init_node('robot_pose_node', anonymous=True)
             
     def run(self):
-        rate = rospy.Rate(1)
-        while True:
-            try:
+        rate = rospy.Rate(2)
+        try:
+            while True:
                 try:
                     pose = self.vive_tracker.devices["tracker_1"].get_pose_euler()
-                    msg = Float32MultiArray()
-                    msg.data = pose
-                    self.pub.publish(msg)
+                    if pose is not None:
+                        msg = Float32MultiArray()
+                        msg.data = pose
+                        self.pub.publish(msg)
+
                     rate.sleep()
-                    
-                except:
+                except Exception as e:
+                    print(e)
                     rate.sleep()
-                    continue
-            except KeyboardInterrupt:
-                break
+        except KeyboardInterrupt:
+            print("stopping tracker node")
 
         
 

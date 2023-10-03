@@ -27,7 +27,7 @@ from bosdyn.api import (image_pb2, arm_command_pb2, geometry_pb2, robot_command_
 from bosdyn.client import math_helpers
 from bosdyn.client.math_helpers import Quat, SE3Pose
 
-from bosdyn.client.frame_helpers import GRAV_ALIGNED_BODY_FRAME_NAME, ODOM_FRAME_NAME, get_a_tform_b
+from bosdyn.client.frame_helpers import GRAV_ALIGNED_BODY_FRAME_NAME, ODOM_FRAME_NAME, get_a_tform_b, get_odom_tform_body
 from bosdyn.client.robot_state import RobotStateClient
 from bosdyn.client.manipulation_api_client import ManipulationApiClient
 
@@ -90,9 +90,11 @@ class FsmNode:
         ## HTC tracker pose init
         self.pose = np.array([0, 0, 0, 0, 0, 0])
         self.initial_position_htc_vive_tracker = np.array([0, 0, 0, 0, 0, 0])
-        self.start_position_offset = np.array([1, 0, 0, 0, 0, 0])
-        self.correction_pose_robot = np.array([1, 0, 0, 0, 0, 0])
+        self.start_position_offset = np.array([0, 0, 1, 0, 0, 0])
         self.initial_position_htc_vive_trackerr_received = True
+        
+        self.calibration_poses = []
+        self.correction_yaw = 0
             
     def callback_action(self, data):
         print(f"\nI heard: {data.data}")
@@ -185,6 +187,7 @@ class FsmNode:
         
     def triangulate_position(self, data):
         pose = self.pose
+        yaw_robot = pose[3]
         
         x_person = data.data[0]
         y_person = data.data[1]
@@ -192,16 +195,22 @@ class FsmNode:
         x_obj = data.data[3]
         y_obj = data.data[4]
         
-        yaw_robot = pose[3]
         
-        vector_person_robot = np.array([pose[0] - x_person, pose[2] - y_person])
+        # vector_person_robot = np.array([pose[2] - x_person, pose[0] - y_person])
+        vector_person_robot = np.array([pose[2] - x_person, pose[0] - y_person])
         vector_person_object = np.array([x_obj - x_person, y_obj - y_person])
         vector_robot_object = vector_person_object - vector_person_robot
         
         print("Vector person --> Robot:", vector_person_robot)
         print("Vector person --> Object:", vector_person_object)
         
-        rotation = np.arctan(vector_robot_object[1]/vector_robot_object[0]) - np.radians(yaw_robot)        
+        
+        if vector_robot_object[0] >= 0:
+            rotation = np.arctan(vector_robot_object[1]/vector_robot_object[0]) - np.radians(yaw_robot)        
+        if vector_robot_object[0] < 0 and vector_robot_object[0] >= 0:
+            rotation = np.arctan(vector_robot_object[1]/vector_robot_object[0]) - np.radians(yaw_robot) + np.pi    
+        elif vector_robot_object[0] < 0 and vector_robot_object[0] < 0:
+            rotation = np.arctan(vector_robot_object[1]/vector_robot_object[0]) - np.radians(yaw_robot) - np.pi      
         
         return vector_robot_object[0], vector_robot_object[1], rotation
         
@@ -209,13 +218,73 @@ class FsmNode:
         if self.initial_position_htc_vive_trackerr_received:
             self.initial_position_htc_vive_tracker = np.array(data.data)
             self.initial_position_htc_vive_trackerr_received = False
-            self.correction_pose_robot = self.start_position_offset - self.initial_position_htc_vive_tracker
-            print(f"Initial Vive Tracker Position: {self.initial_position_htc_vive_tracker}")
-            print(f"Correction Position: {self.correction_pose_robot}")
         
         # Something also to do with yaw of the robot
-        self.pose = np.array(data.data) + self.correction_pose_robot
+        try:
+            self.pose = self.pose_transformation(data.data)
+            if len(self.calibration_poses) <= 30:
+                self.calibration_poses.append(self.pose)
+        except Exception as e:
+            print(e)
+            return
         
+        if len(self.calibration_poses) == 30:
+            self.calibrate_vive_tracker(self.calibration_poses)
+
+    def pose_transformation(self, data):
+        data_zero = np.array(data) - self.initial_position_htc_vive_tracker
+        z = np.cos(self.correction_yaw) * data_zero[2] - np.sin(self.correction_yaw) * data_zero[0]
+        x = np.sin(self.correction_yaw) * data_zero[2] + np.cos(self.correction_yaw) * data_zero[0]
+        y = data[1]
+        
+        data_transformed = [x, y, z, data_zero[3], data_zero[4], data_zero[5]]
+        if self.correction_yaw == 0:
+            return np.array(data_transformed) + (np.zeros((6, )) + 0.001)
+        else:
+            return np.array(data_transformed) + self.start_position_offset
+        
+    def calibrate_vive_tracker(self, calibration_poses):
+        
+        
+        
+        try:
+            yaw_per_pose = [] # yaw in degrees
+            for pose in calibration_poses[5:]:
+                x = pose[0]
+                z = pose[2]
+                if z >= 0:
+                    yaw_radian = np.arctan(x/z)
+                if z < 0 and x >= 0:
+                    yaw_radian = np.arctan(x/z) + np.pi
+                elif z < 0 and x < 0:
+                    yaw_radian = np.arctan(x/z) - np.pi
+                    
+                yaw_degrees = np.rad2deg(yaw_radian)
+                yaw_per_pose.append(yaw_degrees)
+                
+            self.correction_yaw = np.average(yaw_per_pose)
+            print("Correction YAW: ", self.correction_yaw)
+            
+            x = -1
+            y = 0
+            yaw = 0
+            self.robot.two_d_location_body_frame_command(x, y, yaw)
+            self.robot.sit_down()
+            print("Calibration Finished.")    
+        
+        except Exception as e:
+            print(e)
+        
+        return
+            
+        
+    def calibration_movement(self):
+        x = 1
+        y = 0
+        yaw = 0
+        self.robot.two_d_location_body_frame_command(x, y, yaw)
+        return
+    
     def callback_deictic_pickup(self, data):
         x, y, yaw = self.triangulate_position(data)
         print(f"Walking to x:{x}, y:{y}, angle:{yaw}")
@@ -230,11 +299,20 @@ class FsmNode:
         
         self.drop_off_object_in_front_of_robot()
         
+        
     
     def callback_deictic_walk(self, data):
         x, y, yaw = self.triangulate_position(data)
         print(f"Walking to x:{x}, y:{y}, angle:{yaw}")
-        self.robot.two_d_location_body_frame_command(x, y, yaw)
+        
+        # x = 1.0
+        # y = 0.0
+        # yaw = 0.0
+        
+        # self.robot.two_d_location_body_frame_command(x, y, yaw)
+        # time.sleep(3)
+        
+        print("New robot pose: ", self.pose)
         
     
     def run(self):
@@ -246,7 +324,12 @@ class FsmNode:
         # rospy.Subscriber("deictic_pick_up", Pose, self.callback_deictic_pickup)
         # rospy.Subscriber("deictic_drop_off", Pose, self.callback_deictic_dropoff)
         rospy.Subscriber("deictic_walk", Float32MultiArray, self.callback_deictic_walk)
+        
+        time.sleep(1)
+        self.calibration_movement()
+        
         rospy.spin()
+
         
 
 if __name__ == "__main__":
@@ -256,7 +339,7 @@ if __name__ == "__main__":
     
     if robotInterface:
         sdk = bosdyn.client.create_standard_sdk('SpotControlInterface')
-        robot = sdk.create_robot("192.168.61.157")
+        robot = sdk.create_robot("192.168.20.157")
         robotInterface.robot_sdk = robot
         bosdyn.client.util.authenticate(robot)
         robot.time_sync.wait_for_sync()
@@ -281,10 +364,9 @@ if __name__ == "__main__":
             robotInterface.robot_state_client = robot.ensure_client(RobotStateClient.default_service_name)
             robotInterface.manipulation_api_client = robot.ensure_client(ManipulationApiClient.default_service_name)
             
-            robotInterface.stand(0.0)
             time.sleep(1)
 
-            fsm = FsmNode(robot=robotInterface, robot_sdk=robot) 
+            fsm = FsmNode(robot=robotInterface, robot_sdk=robot)
             fsm.run()
     else:
         fsm = FsmNode(robot=robotInterface) 
