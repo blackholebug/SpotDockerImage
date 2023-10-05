@@ -139,6 +139,8 @@ class SpotControlInterface(ManipulatorFunctions):
                 break
             time.sleep(0.25)
             
+        self.ready_or_stow_arm(stow=True)
+            
     def drop_off_object_in_front_of_robot(self):
         self.ready_or_stow_arm()
         

@@ -230,6 +230,9 @@ class FsmNode:
         
         if len(self.calibration_poses) == 30:
             self.calibrate_vive_tracker(self.calibration_poses)
+            print("Starting robot pose: ", self.pose)
+            print("Starting robot pose corrected: ", self.pose_transformation(data.data))
+            
 
     def pose_transformation(self, data):
         data_zero = np.array(data) - self.initial_position_htc_vive_tracker
@@ -244,12 +247,9 @@ class FsmNode:
             return np.array(data_transformed) + self.start_position_offset
         
     def calibrate_vive_tracker(self, calibration_poses):
-        
-        
-        
         try:
             yaw_per_pose = [] # yaw in degrees
-            for pose in calibration_poses[5:]:
+            for pose in calibration_poses:
                 x = pose[0]
                 z = pose[2]
                 if z >= 0:
@@ -259,11 +259,10 @@ class FsmNode:
                 elif z < 0 and x < 0:
                     yaw_radian = np.arctan(x/z) - np.pi
                     
-                yaw_degrees = np.rad2deg(yaw_radian)
-                yaw_per_pose.append(yaw_degrees)
+                yaw_per_pose.append(yaw_radian)
                 
-            self.correction_yaw = np.average(yaw_per_pose)
-            print("Correction YAW: ", self.correction_yaw)
+            self.correction_yaw = np.average(yaw_per_pose) * -1
+            print("Correction YAW degrees: ", np.rad2deg(self.correction_yaw))
             
             x = -1
             y = 0
@@ -290,14 +289,14 @@ class FsmNode:
         print(f"Walking to x:{x}, y:{y}, angle:{yaw}")
         self.robot.two_d_location_body_frame_command(x, y, yaw)
         
-        self.pick_up_object_in_front_of_robot()
+        self.robot.pick_up_object_in_front_of_robot()
     
     def callback_deictic_dropoff(self, data):
         x, y, yaw = self.triangulate_position(data)
         print(f"Walking to x:{x}, y:{y}, angle:{yaw}")
         self.robot.two_d_location_body_frame_command(x, y, yaw)
         
-        self.drop_off_object_in_front_of_robot()
+        self.robot.drop_off_object_in_front_of_robot()
         
         
     
@@ -305,12 +304,8 @@ class FsmNode:
         x, y, yaw = self.triangulate_position(data)
         print(f"Walking to x:{x}, y:{y}, angle:{yaw}")
         
-        # x = 1.0
-        # y = 0.0
-        # yaw = 0.0
-        
-        # self.robot.two_d_location_body_frame_command(x, y, yaw)
-        # time.sleep(3)
+        self.robot.two_d_location_body_frame_command(x, y, yaw)
+        time.sleep(1)
         
         print("New robot pose: ", self.pose)
         
