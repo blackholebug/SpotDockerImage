@@ -90,7 +90,7 @@ class FsmNode:
         ## HTC tracker pose init
         self.pose = np.array([0, 0, 0, 0, 0, 0])
         self.initial_position_htc_vive_tracker = np.array([0, 0, 0, 0, 0, 0])
-        self.start_position_offset = np.array([0, 0, 1, 0, 0, 0])
+        self.start_position_offset = np.array([0, 0, 1.2, 0, 0, 0])
         self.initial_position_htc_vive_trackerr_received = True
         
         self.calibration_poses = []
@@ -106,6 +106,9 @@ class FsmNode:
             pass
         else:
             try_state_send(self.sm, data.data)
+            
+    def callback_action_dummy(self, data):
+        print(f"\nI heard: {data.data}")
         
     def callback_gripper(self, data):
         if self.robot.current_state_direct_control:
@@ -278,7 +281,7 @@ class FsmNode:
             
         
     def calibration_movement(self):
-        x = 1
+        x = 1.2
         y = 0
         yaw = 0
         self.robot.two_d_location_body_frame_command(x, y, yaw)
@@ -309,7 +312,6 @@ class FsmNode:
         
         print("New robot pose: ", self.pose)
         
-    
     def run(self):
         rospy.init_node('listener', anonymous=True)
         rospy.Subscriber("chatter", String, self.callback_action)
@@ -324,13 +326,18 @@ class FsmNode:
         self.calibration_movement()
         
         rospy.spin()
+    
+    def run_dummy(self):
+        rospy.init_node('listener', anonymous=True)
+        rospy.Subscriber("chatter", String, self.callback_action_dummy)
+        rospy.spin()
 
         
 
 if __name__ == "__main__":
 
-    robotInterface = SpotControlInterface(DIRECT_CONTROL_FREQUENCY)
-    # robotInterface = None
+    # robotInterface = SpotControlInterface(DIRECT_CONTROL_FREQUENCY)
+    robotInterface = None
     
     if robotInterface:
         sdk = bosdyn.client.create_standard_sdk('SpotControlInterface')
@@ -364,7 +371,7 @@ if __name__ == "__main__":
             fsm = FsmNode(robot=robotInterface, robot_sdk=robot)
             fsm.run()
     else:
-        fsm = FsmNode(robot=robotInterface) 
-        fsm.run()
+        fsm = FsmNode(robot=robotInterface, robot_sdk=None) 
+        fsm.run_dummy()
         
     # robotInterface.sit_down()

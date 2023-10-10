@@ -81,8 +81,8 @@ class SpotStateMachine(StateMachine):
     def __init__(self, robot):
         self.robot = robot
         super().__init__()
-        self.robot_speed = 0.2
-        self.movement_duration = 1
+        self.robot_speed = 0.3
+        self.movement_duration = 2
         
     def after_stop_action(self):
         self.robot.stop()
