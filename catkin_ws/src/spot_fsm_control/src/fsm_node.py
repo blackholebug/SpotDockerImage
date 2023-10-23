@@ -95,6 +95,7 @@ class FsmNode:
         
         self.calibration_poses = []
         self.correction_yaw = 0
+        self.current_yaw_state = 0 # in radians
             
     def callback_action(self, data):
         print(f"\nI heard: {data.data}")
@@ -209,11 +210,11 @@ class FsmNode:
         
         
         if vector_robot_object[0] >= 0:
-            rotation = np.arctan(vector_robot_object[1]/vector_robot_object[0]) - np.radians(yaw_robot)        
-        if vector_robot_object[0] < 0 and vector_robot_object[0] >= 0:
-            rotation = np.arctan(vector_robot_object[1]/vector_robot_object[0]) - np.radians(yaw_robot) + np.pi    
-        elif vector_robot_object[0] < 0 and vector_robot_object[0] < 0:
-            rotation = np.arctan(vector_robot_object[1]/vector_robot_object[0]) - np.radians(yaw_robot) - np.pi      
+            rotation = np.arctan(vector_robot_object[1]/vector_robot_object[0]) - self.current_yaw_state      
+        if vector_robot_object[0] < 0 and vector_robot_object[1] >= 0:
+            rotation = np.arctan(vector_robot_object[1]/vector_robot_object[0]) - self.current_yaw_state + np.pi    
+        elif vector_robot_object[0] < 0 and vector_robot_object[1] < 0:
+            rotation = np.arctan(vector_robot_object[1]/vector_robot_object[0]) - self.current_yaw_state - np.pi      
         
         return vector_robot_object[0], vector_robot_object[1], rotation
         
@@ -252,7 +253,7 @@ class FsmNode:
     def calibrate_vive_tracker(self, calibration_poses):
         try:
             yaw_per_pose = [] # yaw in degrees
-            for pose in calibration_poses:
+            for pose in calibration_poses[5:]:
                 x = pose[0]
                 z = pose[2]
                 if z >= 0:
@@ -290,6 +291,7 @@ class FsmNode:
     def callback_deictic_pickup(self, data):
         x, y, yaw = self.triangulate_position(data)
         print(f"Walking to x:{x}, y:{y}, angle:{yaw}")
+        self.current_yaw_state += yaw
         self.robot.two_d_location_body_frame_command(x, y, yaw)
         
         self.robot.pick_up_object_in_front_of_robot()
@@ -297,6 +299,7 @@ class FsmNode:
     def callback_deictic_dropoff(self, data):
         x, y, yaw = self.triangulate_position(data)
         print(f"Walking to x:{x}, y:{y}, angle:{yaw}")
+        self.current_yaw_state += yaw
         self.robot.two_d_location_body_frame_command(x, y, yaw)
         
         self.robot.drop_off_object_in_front_of_robot()
@@ -307,7 +310,8 @@ class FsmNode:
         x, y, yaw = self.triangulate_position(data)
         print(f"Walking to x:{x}, y:{y}, angle:{yaw}")
         
-        self.robot.two_d_location_body_frame_command(x, y, yaw)
+        self.current_yaw_state += yaw
+        self.robot.two_d_location_body_frame_command(x, y, 0)
         time.sleep(1)
         
         print("New robot pose: ", self.pose)
@@ -315,8 +319,8 @@ class FsmNode:
     def run(self):
         rospy.init_node('listener', anonymous=True)
         rospy.Subscriber("chatter", String, self.callback_action)
-        # rospy.Subscriber("gripper", String, self.callback_gripper)
-        # rospy.Subscriber("hand_pose", Pose, self.callback_hand_pose)
+        rospy.Subscriber("gripper", String, self.callback_gripper)
+        rospy.Subscriber("hand_pose", Pose, self.callback_hand_pose)
         rospy.Subscriber("robot_pose", Float32MultiArray, self.callback_tracker_pose)
         # rospy.Subscriber("deictic_pick_up", Pose, self.callback_deictic_pickup)
         # rospy.Subscriber("deictic_drop_off", Pose, self.callback_deictic_dropoff)
@@ -336,8 +340,8 @@ class FsmNode:
 
 if __name__ == "__main__":
 
-    # robotInterface = SpotControlInterface(DIRECT_CONTROL_FREQUENCY)
-    robotInterface = None
+    robotInterface = SpotControlInterface(DIRECT_CONTROL_FREQUENCY)
+    # robotInterface = None
     
     if robotInterface:
         sdk = bosdyn.client.create_standard_sdk('SpotControlInterface')

@@ -9,12 +9,19 @@
       output="screen" 
       args=""
     />
-  <!-- <node
+  <node
     pkg="htc_vive_tracker"
     type="node.py"
     name="htc_vive_tracker_node" 
     output="screen" 
     args=""
+  />
+  <!-- <node
+      pkg="gesture_classification"
+      type="gesture_node.py"
+      name="gesture_node" 
+      output="screen" 
+      args=""
   /> -->
   <node name="unity_endpoint" pkg="ros_tcp_endpoint" type="default_server_endpoint.py" output="screen">
     <param name="tcp_ip" type="string" value="$(arg tcp_ip)"/>
