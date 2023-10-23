@@ -12,8 +12,11 @@ Actions are controlled by a state machine to allow for serialized execution of a
 
 ## Versions
 * ROS Noetic
+  * [Windows install instructions](https://www.youtube.com/watch?v=8QC7-Odeqhc)
 * Python 3.8.10
 * bosdyn 3.2.0 PyPi packages
+* [ROS-TCP-Connector](https://github.com/Unity-Technologies/ROS-TCP-Connector)
+    * Needs to be cloned in the ```catkin_ws/src``` folder
 
 ## Run the image
 Run the nodes on docker. Make sure to open docker desktop in Windows.
