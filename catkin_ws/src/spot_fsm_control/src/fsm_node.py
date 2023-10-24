@@ -291,16 +291,18 @@ class FsmNode:
     def callback_deictic_pickup(self, data):
         x, y, yaw = self.triangulate_position(data)
         print(f"Walking to x:{x}, y:{y}, angle:{yaw}")
-        self.current_yaw_state += yaw
         self.robot.two_d_location_body_frame_command(x, y, yaw)
+        self.current_yaw_state += yaw
         
+        time.sleep(1)
         self.robot.pick_up_object_in_front_of_robot()
     
     def callback_deictic_dropoff(self, data):
         x, y, yaw = self.triangulate_position(data)
         print(f"Walking to x:{x}, y:{y}, angle:{yaw}")
-        self.current_yaw_state += yaw
+        
         self.robot.two_d_location_body_frame_command(x, y, yaw)
+        self.current_yaw_state += yaw
         
         self.robot.drop_off_object_in_front_of_robot()
         
@@ -310,8 +312,8 @@ class FsmNode:
         x, y, yaw = self.triangulate_position(data)
         print(f"Walking to x:{x}, y:{y}, angle:{yaw}")
         
+        self.robot.two_d_location_body_frame_command(x, y, yaw)
         self.current_yaw_state += yaw
-        self.robot.two_d_location_body_frame_command(x, y, 0)
         time.sleep(1)
         
         print("New robot pose: ", self.pose)
@@ -322,8 +324,8 @@ class FsmNode:
         rospy.Subscriber("gripper", String, self.callback_gripper)
         rospy.Subscriber("hand_pose", Pose, self.callback_hand_pose)
         rospy.Subscriber("robot_pose", Float32MultiArray, self.callback_tracker_pose)
-        # rospy.Subscriber("deictic_pick_up", Pose, self.callback_deictic_pickup)
-        # rospy.Subscriber("deictic_drop_off", Pose, self.callback_deictic_dropoff)
+        rospy.Subscriber("deictic_pick_up", Float32MultiArray, self.callback_deictic_pickup)
+        rospy.Subscriber("deictic_drop_off", Float32MultiArray, self.callback_deictic_dropoff)
         rospy.Subscriber("deictic_walk", Float32MultiArray, self.callback_deictic_walk)
         
         time.sleep(1)
@@ -345,6 +347,7 @@ if __name__ == "__main__":
     
     if robotInterface:
         sdk = bosdyn.client.create_standard_sdk('SpotControlInterface')
+        # robot = sdk.create_robot("192.168.31.214")
         robot = sdk.create_robot("192.168.20.157")
         robotInterface.robot_sdk = robot
         bosdyn.client.util.authenticate(robot)
