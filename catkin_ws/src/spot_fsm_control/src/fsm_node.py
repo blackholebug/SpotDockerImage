@@ -24,7 +24,7 @@ from bosdyn.client.robot_command import RobotCommandBuilder, RobotCommandClient,
 from bosdyn.choreography.client.choreography import ChoreographyClient
 
 from bosdyn.api import (image_pb2, arm_command_pb2, geometry_pb2, robot_command_pb2, synchronized_command_pb2, trajectory_pb2)
-from bosdyn.client import math_helpers
+from bosdyn.client import math_helpers, quat_to_eulerZYX
 from bosdyn.client.math_helpers import Quat, SE3Pose
 
 from bosdyn.client.frame_helpers import GRAV_ALIGNED_BODY_FRAME_NAME, ODOM_FRAME_NAME, get_a_tform_b, get_odom_tform_body
@@ -87,14 +87,15 @@ class FsmNode:
         self.frequency_pose_count = int(60 // DIRECT_CONTROL_FREQUENCY)
         self.pose_receive_count = 0
         
-        ## HTC tracker pose init
+        ## Odometry pose init
         self.pose = np.array([0, 0, 0, 0, 0, 0])
-        self.initial_position_htc_vive_tracker = np.array([0, 0, 0, 0, 0, 0])
-        self.start_position_offset = np.array([0, 0, 1.2, 0, 0, 0])
-        self.initial_position_htc_vive_trackerr_received = True
         
-        self.calibration_poses = []
-        self.correction_yaw = 0
+        self.initial_position_vision_odom = np.array([0, 0, 0, 0, 0, 0])
+        self.initial_position_odom = np.array([0, 0, 0, 0, 0, 0])
+        self.start_position_offset = np.array([0, 0, 1.2, 0, 0, 0])
+        
+        self.correction_yaw_odom = 0
+        self.correction_yaw_vision = 0
         self.current_yaw_state = 0 # in radians
             
     def callback_action(self, data):
@@ -111,87 +112,12 @@ class FsmNode:
     def callback_action_dummy(self, data):
         print(f"\nI heard: {data.data}")
         
-    def callback_gripper(self, data):
-        if self.robot.current_state_direct_control:
-            close_or_open = data.data
-            self.robot.gripper(close_or_open)
-        else:
-            pass
-        
-    
-    def callback_hand_pose(self, data):
-        if self.robot.current_state_direct_control:
-            if self.robot.init_pos_empty:
-                self.arm_pos_init = [data.position.x, data.position.y, data.position.z]
-        
-            pos = 1.0*(np.array([data.position.x, data.position.y, data.position.z] - np.array(self.arm_pos_init)))
-            orientation = math_helpers.Quat(1, 0, 0, 0)
-            hand_pose = math_helpers.SE3Pose(x=0.75+pos[0], y=pos[1], z=0.45+pos[2], rot=orientation)
-            
-            self.pose_receive_count += 1
-            if self.pose_receive_count >= self.frequency_pose_count:
-                print(hand_pose)
-                self.pose_receive_count = 0
-                self.robot.init_pos_empty = False
-                self.robot.move_to_cartesian_pose_rt_task(hand_pose, self.odom_T_task, self.wr1_T_tool)
-        
-        # end func
-        
-    def callback_hand_pose_trajectory(self, data):
-        if self.robot.current_state_direct_control:
-            if self.robot.init_pos_empty:
-                self.arm_pos_init = [data.position.x, data.position.y, data.position.z]
-                self.arm_ori_init = math_helpers.Quat(
-                    w = data.orientation.w,
-                    x = data.orientation.x,
-                    y = data.orientation.y,
-                    z = data.orientation.z
-                )
-                self.robot.init_pos_empty = False
-        
-            pos = 10*(np.array([data.position.x, data.position.y, data.position.z] - np.array(self.arm_pos_init)))
-            
-            quaternion = math_helpers.Quat(
-                w = data.orientation.w,
-                x = data.orientation.x,
-                y = data.orientation.y,
-                z = data.orientation.z
-            )
-            orientation = math_helpers.Quat()
-            
-            self.arm_pos_init = [data.position.x, data.position.y, data.position.z]
-            
-            hand_pose = math_helpers.SE3Pose(x=pos[0], y=pos[1], z=pos[2], rot=orientation)
-            traj_point = trajectory_pb2.SE3TrajectoryPoint(pose=hand_pose.to_proto())
-            self.direct_control_trajectory_list.append(traj_point)
-            
-            if len(self.direct_control_trajectory_list) >= 12:
-                zero_pose = math_helpers.SE3Pose(x=0, y=0, z=0, rot=math_helpers.Quat())
-                zero_trajectory_pose = trajectory_pb2.SE3TrajectoryPoint(pose=zero_pose.to_proto())
-                print(f"Executing path, total waypoint count {len(self.direct_control_trajectory_list)}")
-                hand_traj = trajectory_pb2.SE3Trajectory(points=self.direct_control_trajectory_list)
-                
-                zero_pose = math_helpers.SE3Pose(x=0, y=0, z=0, rot=math_helpers.Quat())
-                zero_trajectory_pose = trajectory_pb2.SE3TrajectoryPoint(pose=zero_pose.to_proto())
-                self.direct_control_trajectory_list = [zero_trajectory_pose]
-                
-                arm_cartesian_command = arm_command_pb2.ArmCartesianCommand.Request(pose_trajectory_in_task=hand_traj, root_frame_name="hand") #  "flat_body")
-                
-                # Pack everything up in protos.
-                arm_command = arm_command_pb2.ArmCommand.Request(arm_cartesian_command=arm_cartesian_command)
-                synchronized_command = synchronized_command_pb2.SynchronizedCommand.Request(arm_command=arm_command)
-                robot_command = robot_command_pb2.RobotCommand(synchronized_command=synchronized_command)
-                # print('Sending trajectory command... \n')
-
-                # Send the trajectory to the robot.
-                self.robot.command_client.robot_command(robot_command)
-            
-        else:
-            pass
-        
     def triangulate_position(self, data):
-        pose = self.pose
-        yaw_robot = pose[3]
+        vision_T_body = get_a_tform_b(self.robot.robot_state_client.get_robot_state().kinematic_state.transforms_snapshot,"vision","body") 
+        visionBodyEuler = quat_to_eulerZYX(vision_T_body.rot)
+        pose_raw = [vision_T_body.x, vision_T_body.y, vision_T_body.z, visionBodyEuler[0], visionBodyEuler[1], visionBodyEuler[2]]
+        
+        pose = self.pose_transformation_vision(pose_raw)
         
         x_person = data.data[0]
         y_person = data.data[1]
@@ -199,9 +125,7 @@ class FsmNode:
         x_obj = data.data[3]
         y_obj = data.data[4]
         
-        
-        # vector_person_robot = np.array([pose[2] - x_person, pose[0] - y_person])
-        vector_person_robot = np.array([pose[2] - x_person, pose[0] - y_person])
+        vector_person_robot = np.array([pose[0] - x_person, pose[1] - y_person])
         vector_person_object = np.array([x_obj - x_person, y_obj - y_person])
         vector_robot_object = vector_person_object - vector_person_robot
         
@@ -210,39 +134,19 @@ class FsmNode:
         
         
         if vector_robot_object[0] >= 0:
-            rotation = np.arctan(vector_robot_object[1]/vector_robot_object[0]) - self.current_yaw_state      
+            rotation = np.arctan(vector_robot_object[1]/vector_robot_object[0]) - pose[3]    
         if vector_robot_object[0] < 0 and vector_robot_object[1] >= 0:
-            rotation = np.arctan(vector_robot_object[1]/vector_robot_object[0]) - self.current_yaw_state + np.pi    
+            rotation = np.arctan(vector_robot_object[1]/vector_robot_object[0]) - pose[3] + np.pi    
         elif vector_robot_object[0] < 0 and vector_robot_object[1] < 0:
-            rotation = np.arctan(vector_robot_object[1]/vector_robot_object[0]) - self.current_yaw_state - np.pi      
+            rotation = np.arctan(vector_robot_object[1]/vector_robot_object[0]) - pose[3] - np.pi      
         
         return vector_robot_object[0], vector_robot_object[1], rotation
-        
-    def callback_tracker_pose(self, data):
-        if self.initial_position_htc_vive_trackerr_received:
-            self.initial_position_htc_vive_tracker = np.array(data.data)
-            self.initial_position_htc_vive_trackerr_received = False
-        
-        # Something also to do with yaw of the robot
-        try:
-            self.pose = self.pose_transformation(data.data)
-            if len(self.calibration_poses) <= 30:
-                self.calibration_poses.append(self.pose)
-        except Exception as e:
-            print(e)
-            return
-        
-        if len(self.calibration_poses) == 30:
-            self.calibrate_vive_tracker(self.calibration_poses)
-            print("Starting robot pose: ", self.pose)
-            print("Starting robot pose corrected: ", self.pose_transformation(data.data))
-            
 
-    def pose_transformation(self, data):
-        data_zero = np.array(data) - self.initial_position_htc_vive_tracker
-        z = np.cos(self.correction_yaw) * data_zero[2] - np.sin(self.correction_yaw) * data_zero[0]
-        x = np.sin(self.correction_yaw) * data_zero[2] + np.cos(self.correction_yaw) * data_zero[0]
-        y = data[1]
+    def pose_transformation_vision(self, data):
+        data_zero = np.array(data) - self.initial_position_vision_odom
+        x = np.cos(self.correction_yaw_vision) * data_zero[0] - np.sin(self.correction_yaw_vision) * data_zero[1]
+        y = np.sin(self.correction_yaw_vision) * data_zero[0] + np.cos(self.correction_yaw_vision) * data_zero[1]
+        z = data[2]
         
         data_transformed = [x, y, z, data_zero[3], data_zero[4], data_zero[5]]
         if self.correction_yaw == 0:
@@ -250,30 +154,46 @@ class FsmNode:
         else:
             return np.array(data_transformed) + self.start_position_offset
         
-    def calibrate_vive_tracker(self, calibration_poses):
+    def calibrate_odometry_rotations(self, calibration_poses):
         try:
             yaw_per_pose = [] # yaw in degrees
-            for pose in calibration_poses[5:]:
+            for pose in calibration_poses:#[5:]:
                 x = pose[0]
-                z = pose[2]
-                if z >= 0:
-                    yaw_radian = np.arctan(x/z)
-                if z < 0 and x >= 0:
-                    yaw_radian = np.arctan(x/z) + np.pi
-                elif z < 0 and x < 0:
-                    yaw_radian = np.arctan(x/z) - np.pi
+                y = pose[1]
+                if x >= 0:
+                    yaw_radian = np.arctan(y/x)
+                if x < 0 and y >= 0:
+                    yaw_radian = np.arctan(y/x) + np.pi
+                elif x < 0 and y < 0:
+                    yaw_radian = np.arctan(y/x) - np.pi
                     
                 yaw_per_pose.append(yaw_radian)
                 
-            self.correction_yaw = np.average(yaw_per_pose) * -1
-            print("Correction YAW degrees: ", np.rad2deg(self.correction_yaw))
-            
-            x = -1
-            y = 0
-            yaw = 0
-            self.robot.two_d_location_body_frame_command(x, y, yaw)
-            self.robot.sit_down()
-            print("Calibration Finished.")    
+            self.correction_yaw_odom = np.average(yaw_per_pose) * -1
+            print("Correction YAW ODOM degrees: ", np.rad2deg(self.correction_yaw))
+        
+        except Exception as e:
+            print(e)
+        
+        return
+
+    def calibrate_vision_odometry_rotations(self, calibration_poses):
+        try:
+            yaw_per_pose = [] # yaw in degrees
+            for pose in calibration_poses:#[5:]:
+                x = pose[0]
+                y = pose[1]
+                if x >= 0:
+                    yaw_radian = np.arctan(y/x)
+                if x < 0 and y >= 0:
+                    yaw_radian = np.arctan(y/x) + np.pi
+                elif x < 0 and y < 0:
+                    yaw_radian = np.arctan(y/x) - np.pi
+                    
+                yaw_per_pose.append(yaw_radian)
+                
+            self.correction_yaw_vision = np.average(yaw_per_pose) * -1
+            print("Correction YAW VISION degrees: ", np.rad2deg(self.correction_yaw)) 
         
         except Exception as e:
             print(e)
@@ -282,37 +202,18 @@ class FsmNode:
             
         
     def calibration_movement(self):
-        x = 1.2
-        y = 0
-        yaw = 0
-        self.robot.two_d_location_body_frame_command(x, y, yaw)
-        return
-    
-    def callback_deictic_pickup(self, data):
-        x, y, yaw = self.triangulate_position(data)
-        print(f"Walking to x:{x}, y:{y}, angle:{yaw}")
-        self.robot.two_d_location_body_frame_command(x, y, yaw)
-        self.current_yaw_state += yaw
+        odom_positions, vision_odom_positions = self.robot.calibration_movement_in_robot_frame()
         
-        time.sleep(1)
-        self.robot.pick_up_object_in_front_of_robot()
-    
-    def callback_deictic_dropoff(self, data):
-        x, y, yaw = self.triangulate_position(data)
-        print(f"Walking to x:{x}, y:{y}, angle:{yaw}")
+        self.initial_position_odom = np.array(odom_positions[0,:])
+        self.initial_position_vision_odom = np.array(vision_odom_positions[0,:])
         
-        self.robot.two_d_location_body_frame_command(x, y, yaw)
-        self.current_yaw_state += yaw
-        
-        self.robot.drop_off_object_in_front_of_robot()
-        
-        
+        return odom_positions, vision_odom_positions
     
     def callback_deictic_walk(self, data):
         x, y, yaw = self.triangulate_position(data)
         print(f"Walking to x:{x}, y:{y}, angle:{yaw}")
         
-        self.robot.two_d_location_body_frame_command(x, y, yaw)
+        self.robot.two_d_location_body_frame_command(x, y, 0)#yaw)
         self.current_yaw_state += yaw
         time.sleep(1)
         
@@ -321,15 +222,17 @@ class FsmNode:
     def run(self):
         rospy.init_node('listener', anonymous=True)
         rospy.Subscriber("chatter", String, self.callback_action)
-        rospy.Subscriber("gripper", String, self.callback_gripper)
-        rospy.Subscriber("hand_pose", Pose, self.callback_hand_pose)
-        rospy.Subscriber("robot_pose", Float32MultiArray, self.callback_tracker_pose)
-        rospy.Subscriber("deictic_pick_up", Float32MultiArray, self.callback_deictic_pickup)
-        rospy.Subscriber("deictic_drop_off", Float32MultiArray, self.callback_deictic_dropoff)
         rospy.Subscriber("deictic_walk", Float32MultiArray, self.callback_deictic_walk)
         
         time.sleep(1)
-        self.calibration_movement()
+        odom_positions, vision_odom_positions = self.calibration_movement()
+        self.calibrate_odometry_rotations(odom_positions)
+        self.calibrate_odometry_rotations(vision_odom_positions)
+        
+        self.robot.two_d_location_body_frame_command(x=-1.0, y=0, yaw=0)
+        self.robot.sit_down()
+        
+        print("Calibration Finished.")   
         
         rospy.spin()
     

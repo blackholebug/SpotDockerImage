@@ -29,7 +29,7 @@ class GestureClassificationNode:
         
         if len(self.incoming_gestures) >= self.serie_size:
             list_to_classify = self.incoming_gestures.copy()
-            self.incoming_gestures = self.incoming_gesture[self.slice_size:]
+            self.incoming_gestures = self.incoming_gestures[self.slice_size:]
             action = max(set(list_to_classify), key=list_to_classify.count)
             count_action = list_to_classify.count(action)
             if count_action > int(self.serie_size*0.66667):

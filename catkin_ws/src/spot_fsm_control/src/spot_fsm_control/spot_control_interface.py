@@ -18,8 +18,9 @@ from bosdyn.choreography.client.choreography import ChoreographyClient
 
 from bosdyn.api import (arm_command_pb2, geometry_pb2, manipulation_api_pb2, robot_command_pb2, synchronized_command_pb2, trajectory_pb2)
 from bosdyn.api.basic_command_pb2 import RobotCommandFeedbackStatus
+from bosdyn.api.spot import robot_command_pb2 as spot_command_pb2
 
-from bosdyn.client import math_helpers
+from bosdyn.client import math_helpers, quat_to_eulerZYX
 from bosdyn.client.frame_helpers import VISION_FRAME_NAME, GRAV_ALIGNED_BODY_FRAME_NAME, ODOM_FRAME_NAME, get_a_tform_b, get_vision_tform_body
 from bosdyn.client.robot_state import RobotStateClient
 from bosdyn.client.manipulation_api_client import ManipulationApiClient
@@ -81,7 +82,7 @@ class SpotControlInterface(ManipulatorFunctions):
             mobility_feedback = feedback.feedback.synchronized_feedback.mobility_command_feedback
             if mobility_feedback.status != RobotCommandFeedbackStatus.STATUS_PROCESSING:
                 print('Failed to reach the goal')
-                return False
+                break
             traj_feedback = mobility_feedback.se2_trajectory_feedback
             if (traj_feedback.status == traj_feedback.STATUS_AT_GOAL and
                     traj_feedback.body_movement_status == traj_feedback.BODY_STATUS_SETTLED):
@@ -93,6 +94,33 @@ class SpotControlInterface(ManipulatorFunctions):
             if time.time() - start_time > max_time:
                 break
             
+            
+    def calibration_movement_in_robot_frame(self, x=1.0, y=0.0, yaw=0.0):
+        odom_positions = []
+        vision_odom_positions = []
+        trajectory_command = RobotCommandBuilder.synchro_trajectory_command_in_body_frame(x,y,yaw, self.robot_sdk.get_frame_tree_snapshot(), locomotion_hint=spot_command_pb2.HINT_CRAWL) # Standard locomotion_hint == 0spot_command_pb2.HINT_AUTO
+        cmd_id = self.command_client.robot_command(trajectory_command, end_time_secs=time.time()+10)
+        
+        while True:
+            feedback = self.command_client.robot_command_feedback(cmd_id)
+            mobility_feedback = feedback.feedback.synchronized_feedback.mobility_command_feedback
+            odom_T_body = get_a_tform_b(self.robot_state_client.get_robot_state().kinematic_state.transforms_snapshot,"odom","body")
+            vision_T_body = get_a_tform_b(self.robot_state_client.get_robot_state().kinematic_state.transforms_snapshot,"vision","body") 
+            odomBodyEuler = quat_to_eulerZYX(odom_T_body.rot)
+            visionBodyEuler = quat_to_eulerZYX(vision_T_body.rot)
+            odom_positions.append([odom_T_body.x, odom_T_body.y, odom_T_body.z, odomBodyEuler[0], odomBodyEuler[1], odomBodyEuler[2]])
+            vision_odom_positions.append([vision_T_body.x, vision_T_body.y, vision_T_body.y, visionBodyEuler[0], visionBodyEuler[1], visionBodyEuler[2]])
+            if mobility_feedback.status != RobotCommandFeedbackStatus.STATUS_PROCESSING:
+                print('Failed to reach the goal')
+                break
+            traj_feedback = mobility_feedback.se2_trajectory_feedback
+            if (traj_feedback.status == traj_feedback.STATUS_AT_GOAL and
+                    traj_feedback.body_movement_status == traj_feedback.BODY_STATUS_SETTLED):
+                print('Arrived at the goal.')
+                break
+            time.sleep(0.2)
+            
+        return odom_positions, vision_odom_positions
         
     
     def pick_up_object_in_front_of_robot(self):
@@ -109,7 +137,22 @@ class SpotControlInterface(ManipulatorFunctions):
             camera_model=image.source.pinhole)
 
         # Optionally add a grasp constraint.  This lets you tell the robot you only want top-down grasps or side-on grasps.
-        add_grasp_constraint(grasp)
+        # add_grasp_constraint(grasp)
+        
+        axis_on_gripper_ewrt_gripper = geometry_pb2.Vec3(x=1, y=0, z=0)
+
+        # The axis in the vision frame is the negative z-axis
+        axis_to_align_with_ewrt_vo = geometry_pb2.Vec3(x=0, y=0, z=-1)
+        
+        # Add the vector constraint to our proto.
+        constraint = grasp.grasp_params.allowable_orientation.add()
+        constraint.vector_alignment_with_tolerance.axis_on_gripper_ewrt_gripper.CopyFrom(
+            axis_on_gripper_ewrt_gripper)
+        constraint.vector_alignment_with_tolerance.axis_to_align_with_ewrt_frame.CopyFrom(
+            axis_to_align_with_ewrt_vo)
+
+        # We'll take anything within about 10 degrees for top-down or horizontal grasps.
+        constraint.vector_alignment_with_tolerance.threshold_radians = 0.17
 
         # Ask the robot to pick up the object
         grasp_request = manipulation_api_pb2.ManipulationApiRequest(pick_object_in_image=grasp)
@@ -280,6 +323,8 @@ def add_grasp_constraint(grasp):
 
     # We'll take anything within about 10 degrees for top-down or horizontal grasps.
     constraint.vector_alignment_with_tolerance.threshold_radians = 0.17
+    
+    return grasp
             
 
 if __name__ == "__main__":

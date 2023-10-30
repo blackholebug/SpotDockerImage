@@ -85,13 +85,14 @@ def arm_object_grasp(config):
         robot.logger.info('Robot standing.')
         
         ### Create odometry movement command
-        trajectory_command = RobotCommandBuilder.synchro_trajectory_command_in_body_frame(0.5, -0.5, -0.78539816339, robot.get_frame_tree_snapshot())
+        trajectory_command = RobotCommandBuilder.synchro_trajectory_command_in_body_frame(1.0, 0.0, 0.0, robot.get_frame_tree_snapshot())
         robot.logger.info("Moving to object")
         cmd_id = command_client.robot_command(trajectory_command, end_time_secs=time.time()+10)
         robot.logger.info("Movement finished.")
         
         while True:
             feedback = command_client.robot_command_feedback(cmd_id)
+            print(vars(feedback.feedback))
             mobility_feedback = feedback.feedback.synchronized_feedback.mobility_command_feedback
             if mobility_feedback.status != RobotCommandFeedbackStatus.STATUS_PROCESSING:
                 print('Failed to reach the goal')
@@ -102,55 +103,6 @@ def arm_object_grasp(config):
                 print('Arrived at the goal.')
                 break
             time.sleep(0.2)
-
-        # Take a picture with a camera
-        robot.logger.info('Getting an image from: %s', config.image_source)
-        image_responses = image_client.get_image_from_sources([config.image_source])
-        image = image_responses[0]
-        x, y = 525, 380
-
-        pick_vec = geometry_pb2.Vec2(x=x, y=y)
-
-        # Build the proto
-        grasp = manipulation_api_pb2.PickObjectInImage(
-            pixel_xy=pick_vec, transforms_snapshot_for_camera=image.shot.transforms_snapshot,
-            frame_name_image_sensor=image.shot.frame_name_image_sensor,
-            camera_model=image.source.pinhole)
-
-        # Optionally add a grasp constraint.  This lets you tell the robot you only want top-down grasps or side-on grasps.
-        add_grasp_constraint(config, grasp, robot_state_client)
-
-        # Ask the robot to pick up the object
-        grasp_request = manipulation_api_pb2.ManipulationApiRequest(pick_object_in_image=grasp)
-
-        # Send the request
-        cmd_response = manipulation_api_client.manipulation_api_command(
-            manipulation_api_request=grasp_request)
-
-        # Get feedback from the robot
-        start_time = time.time()
-        while True:
-            feedback_request = manipulation_api_pb2.ManipulationApiFeedbackRequest(
-                manipulation_cmd_id=cmd_response.manipulation_cmd_id)
-
-            # Send the request
-            response = manipulation_api_client.manipulation_api_feedback_command(
-                manipulation_api_feedback_request=feedback_request)
-
-            print(
-                f'Current state: {manipulation_api_pb2.ManipulationFeedbackState.Name(response.current_state)}'
-            )
-
-            if response.current_state == manipulation_api_pb2.MANIP_STATE_GRASP_SUCCEEDED or response.current_state == manipulation_api_pb2.MANIP_STATE_GRASP_FAILED:
-                break
-
-            if (time.time() - start_time) > 20:
-                robot.logger.info('Grasping time limit reach, stopping grasping.')
-                break
-            time.sleep(0.25)
-
-        robot.logger.info('Finished grasp.')
-        time.sleep(2.0)
 
         robot.logger.info('Sitting down and turning off.')
 
