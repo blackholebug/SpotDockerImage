@@ -154,7 +154,7 @@ class FsmNode:
         else:
             return np.array(data_transformed) + self.start_position_offset
         
-    def calibrate_odometry_rotations(self, calibration_poses):
+    def calibrate_odometry_rotations(self, calibration_poses, frame="odom"):
         try:
             yaw_per_pose = [] # yaw in degrees
             for pose in calibration_poses:#[5:]:
@@ -169,32 +169,13 @@ class FsmNode:
                     
                 yaw_per_pose.append(yaw_radian)
                 
-            self.correction_yaw_odom = np.average(yaw_per_pose) * -1
-            print("Correction YAW ODOM degrees: ", np.rad2deg(self.correction_yaw))
-        
-        except Exception as e:
-            print(e)
-        
-        return
-
-    def calibrate_vision_odometry_rotations(self, calibration_poses):
-        try:
-            yaw_per_pose = [] # yaw in degrees
-            for pose in calibration_poses:#[5:]:
-                x = pose[0]
-                y = pose[1]
-                if x >= 0:
-                    yaw_radian = np.arctan(y/x)
-                if x < 0 and y >= 0:
-                    yaw_radian = np.arctan(y/x) + np.pi
-                elif x < 0 and y < 0:
-                    yaw_radian = np.arctan(y/x) - np.pi
-                    
-                yaw_per_pose.append(yaw_radian)
-                
-            self.correction_yaw_vision = np.average(yaw_per_pose) * -1
-            print("Correction YAW VISION degrees: ", np.rad2deg(self.correction_yaw)) 
-        
+            if frame == "odom":
+                self.correction_yaw_odom = np.average(yaw_per_pose) * -1
+                print("Correction YAW ODOM degrees: ", np.rad2deg(self.correction_yaw))
+            elif frame == "vision":
+                self.correction_yaw_vision = np.average(yaw_per_pose) * -1
+                print("Correction YAW VISION degrees: ", np.rad2deg(self.correction_yaw)) 
+            
         except Exception as e:
             print(e)
         
@@ -226,8 +207,8 @@ class FsmNode:
         
         time.sleep(1)
         odom_positions, vision_odom_positions = self.calibration_movement()
-        self.calibrate_odometry_rotations(odom_positions)
-        self.calibrate_odometry_rotations(vision_odom_positions)
+        self.calibrate_odometry_rotations(odom_positions, frame="odom")
+        self.calibrate_odometry_rotations(vision_odom_positions, frame="vision")
         
         self.robot.two_d_location_body_frame_command(x=-1.0, y=0, yaw=0)
         self.robot.sit_down()
