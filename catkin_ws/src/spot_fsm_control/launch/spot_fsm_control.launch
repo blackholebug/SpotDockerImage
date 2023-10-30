@@ -10,13 +10,6 @@
       args=""
     />
   <node
-    pkg="htc_vive_tracker"
-    type="node.py"
-    name="htc_vive_tracker_node" 
-    output="screen" 
-    args=""
-  />
-  <node
       pkg="gesture_classification"
       type="gesture_node.py"
       name="gesture_node" 

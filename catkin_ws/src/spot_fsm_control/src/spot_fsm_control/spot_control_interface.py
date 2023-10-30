@@ -20,7 +20,8 @@ from bosdyn.api import (arm_command_pb2, geometry_pb2, manipulation_api_pb2, rob
 from bosdyn.api.basic_command_pb2 import RobotCommandFeedbackStatus
 from bosdyn.api.spot import robot_command_pb2 as spot_command_pb2
 
-from bosdyn.client import math_helpers, quat_to_eulerZYX
+from bosdyn.client import math_helpers
+from bosdyn.client.math_helpers import quat_to_eulerZYX
 from bosdyn.client.frame_helpers import VISION_FRAME_NAME, GRAV_ALIGNED_BODY_FRAME_NAME, ODOM_FRAME_NAME, get_a_tform_b, get_vision_tform_body
 from bosdyn.client.robot_state import RobotStateClient
 from bosdyn.client.manipulation_api_client import ManipulationApiClient
@@ -72,8 +73,8 @@ class SpotControlInterface(ManipulatorFunctions):
         cmd = RobotCommandBuilder.stop_command()
         self.command_client.robot_command(cmd)
         
-    def two_d_location_body_frame_command(self, x, y, yaw):
-        trajectory_command = RobotCommandBuilder.synchro_trajectory_command_in_body_frame(x, y, yaw, self.robot_sdk.get_frame_tree_snapshot())
+    def two_d_location_body_frame_command(self, x, y, yaw, locomotion_hint=spot_command_pb2.HINT_CRAWL):
+        trajectory_command = RobotCommandBuilder.synchro_trajectory_command_in_body_frame(x, y, yaw, self.robot_sdk.get_frame_tree_snapshot(), locomotion_hint=locomotion_hint)
         cmd_id = self.command_client.robot_command(trajectory_command, end_time_secs=time.time()+4)
         max_time = 5
         start_time = time.time()
@@ -95,10 +96,10 @@ class SpotControlInterface(ManipulatorFunctions):
                 break
             
             
-    def calibration_movement_in_robot_frame(self, x=1.0, y=0.0, yaw=0.0):
+    def calibration_movement_in_robot_frame(self, x=1.1, y=0.0, yaw=0.0, locomotion_hint=spot_command_pb2.HINT_AUTO):
         odom_positions = []
         vision_odom_positions = []
-        trajectory_command = RobotCommandBuilder.synchro_trajectory_command_in_body_frame(x,y,yaw, self.robot_sdk.get_frame_tree_snapshot(), locomotion_hint=spot_command_pb2.HINT_CRAWL) # Standard locomotion_hint == 0spot_command_pb2.HINT_AUTO
+        trajectory_command = RobotCommandBuilder.synchro_trajectory_command_in_body_frame(x,y,yaw, self.robot_sdk.get_frame_tree_snapshot(), locomotion_hint=locomotion_hint) # Standard locomotion_hint == 0spot_command_pb2.HINT_AUTO
         cmd_id = self.command_client.robot_command(trajectory_command, end_time_secs=time.time()+10)
         
         while True:

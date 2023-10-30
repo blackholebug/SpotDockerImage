@@ -1,6 +1,6 @@
 # SpotDockerImage
 Catkin workspace to control Spot from Boston Dynamics.
-HTC Vive trackers are used to determine the 6D position of Spot.
+Internal odometry are used to determine the 6D position of Spot.
 
 Can be either run in Docker or on Windows with a ROS installation.
 Docker does not allow for communication with the HTC Vive Tracker.
@@ -35,7 +35,7 @@ For the first time run the make script to compile the ROS nodes and install the 
 make.bat
 ```
 
-If in the same terminal, you can now run only launching the ROS nodes without sourcing.
+If in the same terminal, you can now run only launching the ROS nodes without building and sourcing.
 ```bash
 start.bat
 ```

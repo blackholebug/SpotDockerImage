@@ -24,7 +24,8 @@ from bosdyn.client.robot_command import RobotCommandBuilder, RobotCommandClient,
 from bosdyn.choreography.client.choreography import ChoreographyClient
 
 from bosdyn.api import (image_pb2, arm_command_pb2, geometry_pb2, robot_command_pb2, synchronized_command_pb2, trajectory_pb2)
-from bosdyn.client import math_helpers, quat_to_eulerZYX
+from bosdyn.client import math_helpers
+from bosdyn.client.math_helpers import quat_to_eulerZYX
 from bosdyn.client.math_helpers import Quat, SE3Pose
 
 from bosdyn.client.frame_helpers import GRAV_ALIGNED_BODY_FRAME_NAME, ODOM_FRAME_NAME, get_a_tform_b, get_odom_tform_body
@@ -113,11 +114,7 @@ class FsmNode:
         print(f"\nI heard: {data.data}")
         
     def triangulate_position(self, data):
-        vision_T_body = get_a_tform_b(self.robot.robot_state_client.get_robot_state().kinematic_state.transforms_snapshot,"vision","body") 
-        visionBodyEuler = quat_to_eulerZYX(vision_T_body.rot)
-        pose_raw = [vision_T_body.x, vision_T_body.y, vision_T_body.z, visionBodyEuler[0], visionBodyEuler[1], visionBodyEuler[2]]
-        
-        pose = self.pose_transformation_vision(pose_raw)
+        pose = self.get_robot_vision_pose()
         
         x_person = data.data[0]
         y_person = data.data[1]
@@ -141,6 +138,14 @@ class FsmNode:
             rotation = np.arctan(vector_robot_object[1]/vector_robot_object[0]) - pose[3] - np.pi      
         
         return vector_robot_object[0], vector_robot_object[1], rotation
+    
+    def get_robot_vision_pose(self):
+        vision_T_body = get_a_tform_b(self.robot.robot_state_client.get_robot_state().kinematic_state.transforms_snapshot,"vision","body") 
+        visionBodyEuler = quat_to_eulerZYX(vision_T_body.rot)
+        pose_raw = [vision_T_body.x, vision_T_body.y, vision_T_body.z, visionBodyEuler[0], visionBodyEuler[1], visionBodyEuler[2]]
+        
+        pose = self.pose_transformation_vision(pose_raw)
+        return pose
 
     def pose_transformation_vision(self, data):
         data_zero = np.array(data) - self.initial_position_vision_odom
@@ -171,22 +176,21 @@ class FsmNode:
                 
             if frame == "odom":
                 self.correction_yaw_odom = np.average(yaw_per_pose) * -1
-                print("Correction YAW ODOM degrees: ", np.rad2deg(self.correction_yaw))
+                print("Correction YAW ODOM degrees: ", np.rad2deg(self.correction_yaw_odom))
             elif frame == "vision":
                 self.correction_yaw_vision = np.average(yaw_per_pose) * -1
-                print("Correction YAW VISION degrees: ", np.rad2deg(self.correction_yaw)) 
+                print("Correction YAW VISION degrees: ", np.rad2deg(self.correction_yaw_vision)) 
             
         except Exception as e:
             print(e)
         
         return
-            
         
     def calibration_movement(self):
         odom_positions, vision_odom_positions = self.robot.calibration_movement_in_robot_frame()
         
-        self.initial_position_odom = np.array(odom_positions[0,:])
-        self.initial_position_vision_odom = np.array(vision_odom_positions[0,:])
+        self.initial_position_odom = np.array(odom_positions[0])
+        self.initial_position_vision_odom = np.array(vision_odom_positions[0])
         
         return odom_positions, vision_odom_positions
     
@@ -198,7 +202,7 @@ class FsmNode:
         self.current_yaw_state += yaw
         time.sleep(1)
         
-        print("New robot pose: ", self.pose)
+        print("New robot pose: ", self.get_robot_vision_pose())
         
     def run(self):
         rospy.init_node('listener', anonymous=True)
@@ -212,8 +216,7 @@ class FsmNode:
         
         self.robot.two_d_location_body_frame_command(x=-1.0, y=0, yaw=0)
         self.robot.sit_down()
-        
-        print("Calibration Finished.")   
+        print("Calibration Finished.")
         
         rospy.spin()
     
