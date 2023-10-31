@@ -1,26 +1,18 @@
-from bosdyn.client.command_line import RobotModel
-import bosdyn.client
-import argparse
+from datetime import datetime
+import csv
 
-class Options:
-    
-    outdir = "Model_Files"
+date_start = datetime.now().strftime("%Y-%m-%dT%H%M%S")
+csv_filename = f"C:\\dev\\SpotDockerImage\\data\deictic_movements\\deictic_data_{date_start}.csv"
+with open(csv_filename , 'w', newline='') as file:
+    writer = csv.writer(file)
+    field = ["x_person", "y_person", "x_object", "y_object", "x_robot", "y_robot", "x_robot_new", "y_robot_new"]
+    writer.writerow(field)
+    file.close()
 
 
-options = Options()
-
-
-sdk = bosdyn.client.create_standard_sdk('ArmObjectGraspClient')
-robot = sdk.create_robot("192.168.37.157")
-bosdyn.client.util.authenticate(robot)
-robot.time_sync.wait_for_sync()
-
-parser = argparse.ArgumentParser(description="Robot CLI")
-subparsers = parser.add_subparsers(title="commands", dest="command")
-command_dict = {}
-
-model = RobotModel(subparsers, command_dict)
-
-model._run(robot, options)
-
-print(vars(model))
+data_to_save = [1, 2, 3, 4, 5, 6, 7, 8]
+with open(csv_filename , 'a', newline='') as file:
+    writer = csv.writer(file)
+    writer.writerow(data_to_save)
+    file.close()
+        

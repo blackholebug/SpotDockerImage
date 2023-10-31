@@ -10,8 +10,10 @@ import rospy
 from std_msgs.msg import String, Float32MultiArray
 from geometry_msgs.msg import Pose
 import ast
+import csv
 import numpy as np
 import logging
+from datetime import datetime
 # mp_drawing = mp.solutions.drawing_utils
 # mp_drawing_styles = mp.solutions.drawing_styles
 
@@ -93,7 +95,7 @@ class FsmNode:
         
         self.initial_position_vision_odom = np.array([0, 0, 0, 0, 0, 0])
         self.initial_position_odom = np.array([0, 0, 0, 0, 0, 0])
-        self.start_position_offset = np.array([0, 0, 1.2, 0, 0, 0])
+        self.start_position_offset = np.array([1.2, 0, 0, 0, 0, 0])
         
         self.correction_yaw_odom = 0
         self.correction_yaw_vision = 0
@@ -115,6 +117,7 @@ class FsmNode:
         
     def triangulate_position(self, data):
         pose = self.get_robot_vision_pose()
+        # pose = self.get_robot_odom_pose()
         
         x_person = data.data[0]
         y_person = data.data[1]
@@ -124,20 +127,25 @@ class FsmNode:
         
         vector_person_robot = np.array([pose[0] - x_person, pose[1] - y_person])
         vector_person_object = np.array([x_obj - x_person, y_obj - y_person])
-        vector_robot_object = vector_person_object - vector_person_robot
+        
+        # vector_robot_object = vector_person_object - vector_person_robot ## vector calculation  
+        vector_robot_object = np.array([x_obj - pose[0], y_obj - pose[1]]) # determining relative movement directly fron goal position to starting position
         
         print("Vector person --> Robot:", vector_person_robot)
         print("Vector person --> Object:", vector_person_object)
         
+        x, y = self.rotation_matrix_calc(vector_robot_object[0], vector_robot_object[1], -1*pose[3])
         
         if vector_robot_object[0] >= 0:
-            rotation = np.arctan(vector_robot_object[1]/vector_robot_object[0]) - pose[3]    
+            rotation = np.arctan(y/x) 
         if vector_robot_object[0] < 0 and vector_robot_object[1] >= 0:
-            rotation = np.arctan(vector_robot_object[1]/vector_robot_object[0]) - pose[3] + np.pi    
+            rotation = np.arctan(y/x) + np.pi    
         elif vector_robot_object[0] < 0 and vector_robot_object[1] < 0:
-            rotation = np.arctan(vector_robot_object[1]/vector_robot_object[0]) - pose[3] - np.pi      
+            rotation = np.arctan(y/x) - np.pi      
         
-        return vector_robot_object[0], vector_robot_object[1], rotation
+        data_to_save = [x_person, y_person, x_obj, y_obj, rotation, pose[0], pose[1]]
+        
+        return x, y, rotation, data_to_save
     
     def get_robot_vision_pose(self):
         vision_T_body = get_a_tform_b(self.robot.robot_state_client.get_robot_state().kinematic_state.transforms_snapshot,"vision","body") 
@@ -149,20 +157,40 @@ class FsmNode:
 
     def pose_transformation_vision(self, data):
         data_zero = np.array(data) - self.initial_position_vision_odom
-        x = np.cos(self.correction_yaw_vision) * data_zero[0] - np.sin(self.correction_yaw_vision) * data_zero[1]
-        y = np.sin(self.correction_yaw_vision) * data_zero[0] + np.cos(self.correction_yaw_vision) * data_zero[1]
-        z = data[2]
+        x, y = self.rotation_matrix_calc(data_zero[0], data_zero[1], self.correction_yaw_vision)
+        z = data_zero[2]
         
         data_transformed = [x, y, z, data_zero[3], data_zero[4], data_zero[5]]
-        if self.correction_yaw == 0:
-            return np.array(data_transformed) + (np.zeros((6, )) + 0.001)
-        else:
-            return np.array(data_transformed) + self.start_position_offset
+
+        return np.array(data_transformed) + self.start_position_offset
+    
+    def get_robot_odom_pose(self):
+        odom_T_body = get_a_tform_b(self.robot.robot_state_client.get_robot_state().kinematic_state.transforms_snapshot,"odom","body") 
+        visionBodyEuler = quat_to_eulerZYX(odom_T_body.rot)
+        pose_raw = [odom_T_body.x, odom_T_body.y, odom_T_body.z, visionBodyEuler[0], visionBodyEuler[1], visionBodyEuler[2]]
+        
+        pose = self.pose_transformation_odom(pose_raw)
+        return pose
+
+    def pose_transformation_odom(self, data):
+        data_zero = np.array(data) - self.initial_position_odom
+        x, y = self.rotation_matrix_calc(data_zero[0], data_zero[1], self.correction_yaw_odom)
+        z = data_zero[2]
+        
+        data_transformed = [x, y, z, data_zero[3], data_zero[4], data_zero[5]]
+
+        return np.array(data_transformed) + self.start_position_offset
+        
+
+    def rotation_matrix_calc(self, x, y, rotation):
+        x = np.cos(rotation) * x - np.sin(rotation) * y
+        y = np.sin(rotation) * x + np.cos(rotation) * y
+        return x, y
         
     def calibrate_odometry_rotations(self, calibration_poses, frame="odom"):
         try:
             yaw_per_pose = [] # yaw in degrees
-            for pose in calibration_poses:#[5:]:
+            for pose in calibration_poses[5:]:
                 x = pose[0]
                 y = pose[1]
                 if x >= 0:
@@ -195,16 +223,32 @@ class FsmNode:
         return odom_positions, vision_odom_positions
     
     def callback_deictic_walk(self, data):
-        x, y, yaw = self.triangulate_position(data)
+        x, y, yaw, data_to_save = self.triangulate_position(data)
         print(f"Walking to x:{x}, y:{y}, angle:{yaw}")
         
-        self.robot.two_d_location_body_frame_command(x, y, 0)#yaw)
-        self.current_yaw_state += yaw
+        self.robot.two_d_location_body_frame_command(x, y, yaw)
         time.sleep(1)
+         
+        new_pose = self.get_robot_vision_pose()
+        print("New robot pose: ", new_pose)
         
-        print("New robot pose: ", self.get_robot_vision_pose())
+        data_to_save.append(new_pose[0])
+        data_to_save.append(new_pose[1])
+        data_to_save.append(new_pose[3])
+        with open(self.csv_filename , 'a', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerow(data_to_save)
+            file.close()
         
     def run(self):
+        date_start = datetime.now().strftime("%Y-%m-%dT%H%M%S")
+        self.csv_filename = f"C:\\dev\\SpotDockerImage\\data\deictic_movements\\deictic_data_{date_start}.csv"
+        with open(self.csv_filename , 'w', newline='') as file:
+            writer = csv.writer(file)
+            field = ["x_person", "y_person", "x_object", "y_object", "goal_rotation", "x_robot", "y_robot", "x_robot_new", "y_robot_new", "robot_rotation_new"]
+            writer.writerow(field)
+            file.close()
+
         rospy.init_node('listener', anonymous=True)
         rospy.Subscriber("chatter", String, self.callback_action)
         rospy.Subscriber("deictic_walk", Float32MultiArray, self.callback_deictic_walk)
@@ -216,6 +260,7 @@ class FsmNode:
         
         self.robot.two_d_location_body_frame_command(x=-1.0, y=0, yaw=0)
         self.robot.sit_down()
+        
         print("Calibration Finished.")
         
         rospy.spin()

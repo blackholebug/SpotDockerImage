@@ -75,8 +75,8 @@ class SpotControlInterface(ManipulatorFunctions):
         
     def two_d_location_body_frame_command(self, x, y, yaw, locomotion_hint=spot_command_pb2.HINT_CRAWL):
         trajectory_command = RobotCommandBuilder.synchro_trajectory_command_in_body_frame(x, y, yaw, self.robot_sdk.get_frame_tree_snapshot(), locomotion_hint=locomotion_hint)
-        cmd_id = self.command_client.robot_command(trajectory_command, end_time_secs=time.time()+4)
-        max_time = 5
+        cmd_id = self.command_client.robot_command(trajectory_command, end_time_secs=time.time()+10)
+        max_time = 10
         start_time = time.time()
         while True:
             feedback = self.command_client.robot_command_feedback(cmd_id)
@@ -95,7 +95,7 @@ class SpotControlInterface(ManipulatorFunctions):
             if time.time() - start_time > max_time:
                 break
             
-            
+                
     def calibration_movement_in_robot_frame(self, x=1.1, y=0.0, yaw=0.0, locomotion_hint=spot_command_pb2.HINT_AUTO):
         odom_positions = []
         vision_odom_positions = []
@@ -119,7 +119,7 @@ class SpotControlInterface(ManipulatorFunctions):
                     traj_feedback.body_movement_status == traj_feedback.BODY_STATUS_SETTLED):
                 print('Arrived at the goal.')
                 break
-            time.sleep(0.2)
+            time.sleep(0.1)
             
         return odom_positions, vision_odom_positions
         

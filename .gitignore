@@ -3,6 +3,7 @@ catkin_ws/build
 catkin_ws/devel
 
 triad_openvr
+data
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
