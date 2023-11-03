@@ -4,6 +4,7 @@ import time
 import math
 from statemachine import StateMachine, State
 import numpy as np
+import math
 # from spot_control_interface import SpotControlInterface
 from spot_fsm_control.arm_impedance_control_helpers import get_root_T_ground_body
 from bosdyn.client.frame_helpers import GRAV_ALIGNED_BODY_FRAME_NAME, get_a_tform_b
@@ -91,12 +92,14 @@ class SpotStateMachine(StateMachine):
         
     def on_enter_walk_forward(self):
         self.robot.forward = self.robot_speed
-        self.robot.move_command(duration=self.movement_duration)
+        self.robot.two_d_location_body_frame_command(1.5, 0, 0)
+        # self.robot.move_command(duration=self.movement_duration)
         print("move forward")
 
     def on_enter_walk_backward(self):
         self.robot.forward = -1 * self.robot_speed
-        self.robot.move_command(duration=self.movement_duration)
+        self.robot.two_d_location_body_frame_command(-1.5, 0, 0)
+        # self.robot.move_command(duration=self.movement_duration)
         print("move backward")
 
     def on_enter_stop_walk(self):
@@ -105,22 +108,26 @@ class SpotStateMachine(StateMachine):
 
     def on_enter_turn_left(self):
         self.robot.rotate = self.robot_speed
-        self.robot.move_command(duration=self.movement_duration)
+        self.robot.two_d_location_body_frame_command(0, 0, math.pi/2)
+        # self.robot.move_command(duration=self.movement_duration)
         print("Rotate left")
 
     def on_enter_turn_right(self):
         self.robot.rotate = -1 * self.robot_speed
-        self.robot.move_command(duration=self.movement_duration)
+        # self.robot.move_command(duration=self.movement_duration)
+        self.robot.two_d_location_body_frame_command(0, 0, -math.pi/2)
         print("Rotate right")
 
     def on_enter_walk_left(self):
         self.robot.strafe = self.robot_speed
-        self.robot.move_command(duration=self.movement_duration)
+        self.robot.two_d_location_body_frame_command(0, 0.75, 0)
+        # self.robot.move_command(duration=self.movement_duration)
         print("Move left")
 
     def on_enter_walk_right(self):
         self.robot.strafe = -1 * self.robot_speed
-        self.robot.move_command(duration=self.movement_duration)
+        self.robot.two_d_location_body_frame_command(0, 0.75, 0)
+        # self.robot.move_command(duration=self.movement_duration)
         print("Move right")
 
     def on_exit_arm_trajectory(self):

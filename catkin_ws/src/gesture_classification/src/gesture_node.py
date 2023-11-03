@@ -5,10 +5,11 @@ import rospy
 from std_msgs.msg import Float32MultiArray, String
 import numpy as np
 import pickle
-import sklearn
+import threading
 from scipy.spatial.transform import Rotation as R
 from collections import Counter
 from datetime import datetime
+
 
 class GestureClassificationNode:
     """_summary_    
@@ -17,22 +18,35 @@ class GestureClassificationNode:
     def __init__(self):
         self.clf = pickle.load(open("/catkin_ws/src/gesture_classification/models/LinearSVC.model", 'rb'))
         self.ppl = pickle.load(open("/catkin_ws/src/gesture_classification/models/training.ppl", 'rb'))
-        self.pub = rospy.Publisher('/gesture_rec_out', String, queue_size=60)
+        self.pub_chatter = rospy.Publisher('/chatter', String, queue_size=2)
+        self.pub_rtg = rospy.Publisher('/real_time_gesture', String, queue_size=60)
         self.frame_buffer = []
-        self.frame_sample_rate = 5
-        self.is_debug = True
+        self.frame_sample_rate = 30
+        self.last_gesture = "NoGesture"
+        self.last_execution_time = time.time()
+        self.execution_duration = 2 # duration for action execution
 
         # self.recognition_frequency = 2 # Hz
         # self.slice_size = int( self.serie_size // self.recognition_frequency )
         
         self.label_decoding=[
-            'GoLeft',
-            'GoRight',
-            'TurnLeft',
-            'TurnRight',
-            'Forwards',
-            'Backwards'
+            'walk_to_left',#'GoLeft',
+            'walk_to_right',#'GoRight',
+            'turn_to_left',#'TurnLeft',
+            'turn_to_right',#'TurnRight',
+            'walk_to_forward', #'Forwards',
+            'walk_to_backward',#'Backwards'
         ]
+
+        # self.label_decoding=[
+        #     'stand_up',#'GoLeft',
+        #     'sit_down',#'GoRight',
+        #     'stand_up_high',#'TurnLeft',
+        #     'stop_walking',#'TurnRight',
+        #     'stop_walking', #'Forwards',
+        #     'stop_walking',#'Backwards'
+        # ]
+
 
     def frequency_query(self, labels: np.ndarray):
         data = Counter(labels)
@@ -51,11 +65,11 @@ class GestureClassificationNode:
             return invalid_gesture
         print(f"current convidance: {confidence.mean()}")
         return self.label_decoding[label]
-        
+
 
     def recognize_gesture(self):
-        self.frame_buffer = np.array(self.frame_buffer).reshape(-1, 78)
-        x = self.ppl.transform(self.frame_buffer)
+        current_frame_buffer = np.array(self.frame_buffer).reshape(-1, 78)
+        x = self.ppl.transform(current_frame_buffer)
         y = self.clf.predict_proba(x)
         labels = np.argmax(y, axis=1)
         confidence = np.max(y, axis=1)
@@ -64,14 +78,23 @@ class GestureClassificationNode:
         #         print(f"current label: {labels[i]}; current confidence: {confidence[i]} \n")
         res = self.check_threshold(labels, confidence)
         print(f"current gesture: {res}")
-        self.pub.publish(f"{res}")
+        # self.pub_rtg.publish(f"{res}")
+        current_time = time.time()
+        if res != self.last_gesture:
+            # if current_time - self.last_execution_time >= self.execution_duration:
+            # self.last_execution_time = current_time
+            self.pub_chatter.publish(f"{res}")
+            self.last_gesture = res
 
     def callback_gesture(self, data):
         if len(self.frame_buffer) < self.frame_sample_rate:
             self.frame_buffer.append(data.data)
         else:
+            self.frame_buffer.pop(0)
+            self.frame_buffer.append(data.data)
+            # while True and not rospy.is_shutdown():
             self.recognize_gesture()
-            self.frame_buffer = []
+                # rospy.sleep(0.5)
     
     def callback_show_keypoints(self, data):
         array = np.array(data.data).reshape(-1,78)
@@ -80,7 +103,6 @@ class GestureClassificationNode:
 
 
     def run(self):
-        date_time = datetime.now().strftime("%m-%d-%Y-%H:%M:%S")
         rospy.init_node('gesture_recognizer', anonymous=True)
         rospy.Subscriber("/hand_keypoints", Float32MultiArray, self.callback_gesture)
         rospy.spin()
