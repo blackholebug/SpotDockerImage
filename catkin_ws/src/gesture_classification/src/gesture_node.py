@@ -16,8 +16,13 @@ class GestureClassificationNode:
     """
     
     def __init__(self):
-        self.clf = pickle.load(open("/catkin_ws/src/gesture_classification/models/Poly2SVC.model", 'rb'))
-        self.ppl = pickle.load(open("/catkin_ws/src/gesture_classification/models/training.ppl", 'rb'))
+        windows_path_addition = "c:/dev/SpotDockerImage"
+        try:
+            self.clf = pickle.load(open("/catkin_ws/src/gesture_classification/models/Poly2SVC.model", 'rb'))
+            self.ppl = pickle.load(open("/catkin_ws/src/gesture_classification/models/training.ppl", 'rb'))
+        except:
+            self.clf = pickle.load(open(windows_path_addition+"/catkin_ws/src/gesture_classification/models/Poly2SVC.model", 'rb'))
+            self.ppl = pickle.load(open(windows_path_addition+"/catkin_ws/src/gesture_classification/models/training.ppl", 'rb'))
         self.pub_chatter = rospy.Publisher('/chatter', String, queue_size=2)
         self.pub_rtg = rospy.Publisher('/real_time_gesture', String, queue_size=60)
         self.frame_buffer = []
