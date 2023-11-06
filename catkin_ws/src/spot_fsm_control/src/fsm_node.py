@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-
+import os
 import time
 import sys
 sys.path.append("./hagrid/")
@@ -16,6 +16,9 @@ import logging
 from datetime import datetime
 # mp_drawing = mp.solutions.drawing_utils
 # mp_drawing_styles = mp.solutions.drawing_styles
+
+# for parsing protobuf messages like robot_state
+from google.protobuf.json_format import MessageToDict
 
 import bosdyn.client
 import bosdyn.client.lease
@@ -68,6 +71,48 @@ def try_state_send(state_machine, action):
 class FsmNode:
 
     def __init__(self, robot: SpotControlInterface, robot_sdk):
+        ## data collection
+        self.node_start_time = time.time()
+        self.columns_hololens_data = ["timestamp", "gaze_origin [x,y,z]", "gaze_direction unit vector [x,y,z]"]
+        self.columns_spot_data = ["timestamp", "position_odom_spot [x,y,z]", "orientation_odom_spot [yaw,pitch,roll]", "position_vision_spot [x,y,z]", "orientation_vision_spot [yaw,pitch,roll]"]
+        self.columns_action_scripts = ["timestamp", "action_executed", "battery_percentage"]
+        self.participant_number = 0
+        conditions = [
+            "speech_freewalking",
+            "speech_stationary",
+            "gestures_freewalking",
+            "gestures_stationary",
+            "controller_freewalking",
+            "controller_stationary",
+        ]
+        condition = conditions[3]
+        participant_dir = f"c:/dev/SpotDockerImage/data/experiments/P{self.participant_number:03d}"
+        
+        try:
+            # Create the directory
+            os.mkdir(participant_dir)
+            print(f"Directory '{participant_dir}' was created successfully.")
+        except FileExistsError:
+            print(f"Directory '{participant_dir}' already exists.")
+        except OSError as error:
+            print(f"Creation of the directory '{participant_dir}' failed due to: {error}")
+    
+        self.filename_odom = f"{participant_dir}/{condition}_odom.csv"
+        self.filename_hololens = f"{participant_dir}/{condition}_hololens.csv"
+        self.filename_actions = f"{participant_dir}/{condition}_actions.csv"
+        
+        with open(self.filename_hololens, mode="w", newline='', encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow(self.columns_hololens_data)
+            
+        with open(self.filename_odom, mode="w", newline='', encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow(self.columns_spot_data)
+
+        with open(self.filename_actions, mode="w", newline='', encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow(self.columns_action_scripts)
+        
         self.robot = robot
         self.robot_sdk = robot_sdk
         self.sm = SpotStateMachine(robot=robot)
@@ -102,7 +147,17 @@ class FsmNode:
         self.current_yaw_state = 0 # in radians
             
     def callback_action(self, data):
+        timestamp = time.time() - self.node_start_time
+        robot_state = self.robot.robot_state_client.get_robot_state()
+        battery_charge_percentage = MessageToDict(robot_state)
+        percentage = battery_charge_percentage["batteryStates"][0]["chargePercentage"]
+
+        with open(self.filename_actions, "a", newline='', encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow([timestamp, data.data, percentage])
+            
         print(f"\nI heard: {data.data}")
+        
         if data.data == "stop_action" and self.robot.current_state_direct_control:
             self.robot.stop_direct_control()
             self.robot.current_state_direct_control = False
@@ -241,36 +296,53 @@ class FsmNode:
             file.close()
         
     def run(self):
-        date_start = datetime.now().strftime("%Y-%m-%dT%H%M%S")
-        self.csv_filename = f"C:\\dev\\SpotDockerImage\\data\deictic_movements\\deictic_data_{date_start}.csv"
-        with open(self.csv_filename , 'w', newline='') as file:
-            writer = csv.writer(file)
-            field = ["x_person", "y_person", "x_object", "y_object", "goal_rotation", "x_robot", "y_robot", "x_robot_new", "y_robot_new", "robot_rotation_new"]
-            writer.writerow(field)
-            file.close()
-
         rospy.init_node('listener', anonymous=True)
         rospy.Subscriber("chatter", String, self.callback_action)
-        rospy.Subscriber("deictic_walk", Float32MultiArray, self.callback_deictic_walk)
+        rospy.Subscriber("data_collection", Float32MultiArray, self.callback_data_collection)
         
-        time.sleep(1)
-        odom_positions, vision_odom_positions = self.calibration_movement()
-        self.calibrate_odometry_rotations(odom_positions, frame="odom")
-        self.calibrate_odometry_rotations(vision_odom_positions, frame="vision")
-        
-        self.robot.two_d_location_body_frame_command(x=-1.0, y=0, yaw=0)
-        self.robot.sit_down()
-        
-        print("Calibration Finished.")
+        # date_start = datetime.now().strftime("%Y-%m-%dT%H%M%S")
+        # self.csv_filename = f"C:\\dev\\SpotDockerImage\\data\deictic_movements\\deictic_data_{date_start}.csv"
+        # with open(self.csv_filename , 'w', newline='') as file:
+        #     writer = csv.writer(file)
+        #     field = ["x_person", "y_person", "x_object", "y_object", "goal_rotation", "x_robot", "y_robot", "x_robot_new", "y_robot_new", "robot_rotation_new"]
+        #     writer.writerow(field)
+        #     file.close()
+        # rospy.Subscriber("deictic_walk", Float32MultiArray, self.callback_deictic_walk)
+        # odom_positions, vision_odom_positions = self.calibration_movement()
+        # self.calibrate_odometry_rotations(odom_positions, frame="odom")
+        # self.calibrate_odometry_rotations(vision_odom_positions, frame="vision")
+        # self.robot.two_d_location_body_frame_command(x=-1.0, y=0, yaw=0)
+        # self.robot.sit_down()
+        # print("Calibration Finished.")
         
         rospy.spin()
     
+    def callback_data_collection(self, data):
+        array = data.data
+        timestamp  = time.time() - self.node_start_time
+        entry = [timestamp]
+        entry.extend([array[:3], array[3:6]])
+        with open(self.filename_hololens, "a", newline='', encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow(entry)
+            
+        odometry_vision_data = self.get_robot_vision_pose()
+        odometry_data = self.get_robot_odom_pose()
+        row = [timestamp]
+        row.extend([list(odometry_data[:3])])
+        row.extend([list(odometry_data[3:6])])
+        row.extend([list(odometry_vision_data[:3])])
+        row.extend([list(odometry_vision_data[3:6])])
+        
+        with open(self.filename_odom, "a", newline='', encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow(row)
+
     def run_dummy(self):
         rospy.init_node('listener', anonymous=True)
         rospy.Subscriber("chatter", String, self.callback_action_dummy)
+        # rospy.Subscriber("data_collection", Float32MultiArray, self.callback_data_collection)
         rospy.spin()
-
-        
 
 if __name__ == "__main__":
 
