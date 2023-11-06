@@ -16,8 +16,8 @@ class GestureClassificationNode:
     """
     
     def __init__(self):
-        self.clf = pickle.load(open("c:/dev/SpotDockerImage/catkin_ws/src/gesture_classification/models/LinearSVC.model", 'rb'))
-        self.ppl = pickle.load(open("c:/dev/SpotDockerImage/catkin_ws/src/gesture_classification/models/training.ppl", 'rb'))
+        self.clf = pickle.load(open("/catkin_ws/src/gesture_classification/models/Poly2SVC.model", 'rb'))
+        self.ppl = pickle.load(open("/catkin_ws/src/gesture_classification/models/training.ppl", 'rb'))
         self.pub_chatter = rospy.Publisher('/chatter', String, queue_size=2)
         self.pub_rtg = rospy.Publisher('/real_time_gesture', String, queue_size=60)
         self.frame_buffer = []
@@ -36,6 +36,7 @@ class GestureClassificationNode:
             'turn_to_right',#'TurnRight',
             'walk_to_forward', #'Forwards',
             'walk_to_backward',#'Backwards'
+            'fist',#'None'
         ]
 
         # self.label_decoding=[
@@ -57,11 +58,14 @@ class GestureClassificationNode:
         # only when most labels are the same and the lowest confidence level is above 0.85, return the gesture
         invalid_gesture = "NoGesture"
         vote_threshold = 0.6
-        conf_threshold = 0.93
+        conf_threshold = 0.92
         label, frequency = self.frequency_query(labels)
         if frequency/len(labels) < vote_threshold:
             return invalid_gesture
         if confidence.mean() < conf_threshold:
+            return invalid_gesture
+        # mannually check the fist gesture
+        if label == 6:
             return invalid_gesture
         print(f"current convidance: {confidence.mean()}")
         return self.label_decoding[label]

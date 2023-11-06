@@ -126,7 +126,7 @@ class SpotStateMachine(StateMachine):
 
     def on_enter_walk_right(self):
         self.robot.strafe = -1 * self.robot_speed
-        self.robot.two_d_location_body_frame_command(0, 0.75, 0)
+        self.robot.two_d_location_body_frame_command(0, -0.75, 0)
         # self.robot.move_command(duration=self.movement_duration)
         print("Move right")
 
