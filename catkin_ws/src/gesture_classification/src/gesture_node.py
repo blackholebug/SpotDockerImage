@@ -8,7 +8,7 @@ import pickle
 import threading
 from scipy.spatial.transform import Rotation as R
 from collections import Counter
-from datetime import datetime
+from pathlib import Path
 
 
 class GestureClassificationNode:
@@ -16,8 +16,8 @@ class GestureClassificationNode:
     """
     
     def __init__(self):
-        self.clf = pickle.load(open("/catkin_ws/src/gesture_classification/models/Poly2SVC.model", 'rb'))
-        self.ppl = pickle.load(open("/catkin_ws/src/gesture_classification/models/training.ppl", 'rb'))
+        self.clf = pickle.load(open(Path(__file__).parent.parent.joinpath("models/Poly2SVC.model"), 'rb'))
+        self.ppl = pickle.load(open(Path(__file__).parent.parent.joinpath("models/training.ppl"), 'rb'))
         self.pub_chatter = rospy.Publisher('/chatter', String, queue_size=2)
         self.pub_rtg = rospy.Publisher('/real_time_gesture', String, queue_size=60)
         self.frame_buffer = []
