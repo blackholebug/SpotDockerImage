@@ -73,7 +73,7 @@ class FsmNode:
     def __init__(self, robot: SpotControlInterface, robot_sdk):
         ## data collection
         self.node_start_time = time.time()
-        self.columns_hololens_data = ["timestamp", "gaze_origin [x,y,z]", "gaze_direction unit vector [x,y,z]"]
+        self.columns_hololens_data = ["timestamp", "gaze_origin [x,y,z]", "gaze_direction unit vector [x,y,z]", "Object with hitpoint"]
         self.columns_spot_data = ["timestamp", "position_odom_spot [x,y,z]", "orientation_odom_spot [yaw,pitch,roll]", "position_vision_spot [x,y,z]", "orientation_vision_spot [yaw,pitch,roll]"]
         self.columns_action_scripts = ["timestamp", "action_executed", "battery_percentage"]
         self.participant_number = 0
@@ -321,7 +321,7 @@ class FsmNode:
         array = data.data
         timestamp  = time.time() - self.node_start_time
         entry = [timestamp]
-        entry.extend([array[:3], array[3:6]])
+        entry.extend([array[:3], array[3:6], "no object"])
         with open(self.filename_hololens, "a", newline='', encoding="utf-8") as f:
             writer = csv.writer(f)
             writer.writerow(entry)
@@ -352,7 +352,7 @@ if __name__ == "__main__":
     if robotInterface:
         sdk = bosdyn.client.create_standard_sdk('SpotControlInterface')
         # robot = sdk.create_robot("192.168.31.214")
-        robot = sdk.create_robot("192.168.20.157")
+        robot = sdk.create_robot("192.168.1.109")
         robotInterface.robot_sdk = robot
         bosdyn.client.util.authenticate(robot)
         robot.time_sync.wait_for_sync()
