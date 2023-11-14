@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 from tqdm import tqdm
+import threading
 
 import bosdyn.util
 from bosdyn.api import image_pb2, image_service_pb2_grpc
@@ -10,15 +11,15 @@ from bosdyn.client.image import ImageClient, build_image_request, save_images_as
 
 class VideoStreamSaver:
     
-    def __init__(self, image_client, quality_percent):
+    def __init__(self, image_client, quality_percent=90):
         self.image_client = image_client
         self.images_to_be_saved = [
             "hand_color_image",
+            "back_fisheye_image"
             # "left_fisheye_image",
             # "right_fisheye_image",
             # "frontleft_fisheye_image",
             # "frontright_fisheye_image",
-            "back_fisheye_image"
         ]
         
         image_format = image_pb2.Image.FORMAT_JPEG
@@ -28,8 +29,8 @@ class VideoStreamSaver:
         
         fourcc = cv2.VideoWriter_fourcc(*'XVID')  # or 'MP4V', 'MJPG', etc.
         self.video_writers = [
-            cv2.VideoWriter(f"./data/images/hand_color_{quality_percent}.avi", fourcc, 1.0, (640,480)),
-            cv2.VideoWriter(f"./data/images/back_fisheye_{quality_percent}.avi", fourcc, 1.0, (640,480))
+            cv2.VideoWriter(f"./data/images/hand_color.avi", fourcc, 2.0, (640,480)),
+            cv2.VideoWriter(f"./data/images/back_fisheye.avi", fourcc, 2.0, (640,480))
         ]
 
     def video_thread_with_image_client(self):
@@ -51,17 +52,13 @@ if __name__ == "__main__":
 
     robot.time_sync.wait_for_sync()
     image_client = robot.ensure_client(ImageClient.default_service_name)
-    
-    quality_scores = [1, 10, 25, 50, 75, 90, 95, 99, 100]
-
-    for quality_score in quality_scores:
-        print("Quality Score:", quality_score)
-        vss = VideoStreamSaver(image_client, quality_score)
-        for i in tqdm(range(50)):
-            vss.video_thread_with_image_client()
-            
-            cv2.waitKey(20)
-            
-            
-        for out in vss.video_writers:
-            out.release()
+        
+    vss = VideoStreamSaver(image_client, 90)
+    for i in tqdm(range(10)):
+        vss.video_thread_with_image_client()
+        
+        cv2.waitKey(20)
+        
+        
+    for out in vss.video_writers:
+        out.release()

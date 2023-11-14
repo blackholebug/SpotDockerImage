@@ -2,6 +2,7 @@
 import os
 import time
 import sys
+import threading
 sys.path.append("./hagrid/")
 sys.path.append("./src/")
 
@@ -40,6 +41,7 @@ from bosdyn.client.manipulation_api_client import ManipulationApiClient
 from spot_fsm_control.spot_control_interface import SpotControlInterface
 from spot_fsm_control.finite_state_machine import SpotStateMachine
 from spot_fsm_control.arm_impedance_control_helpers import get_root_T_ground_body
+from spot_fsm_control.video_stream_saver import VideoStreamSaver
 
 logging.basicConfig(format="[LINE:%(lineno)d] %(levelname)-8s [%(asctime)s]  %(message)s", level=logging.INFO)
 
@@ -70,22 +72,13 @@ def try_state_send(state_machine, action):
 
 class FsmNode:
 
-    def __init__(self, robot: SpotControlInterface, robot_sdk):
+    def __init__(self, robot: SpotControlInterface, robot_sdk, participant, condition):
         ## data collection
         self.node_start_time = time.time()
         self.columns_hololens_data = ["timestamp", "gaze_origin [x,y,z]", "gaze_direction unit vector [x,y,z]", "Object with hitpoint"]
         self.columns_spot_data = ["timestamp", "position_odom_spot [x,y,z]", "orientation_odom_spot [yaw,pitch,roll]", "position_vision_spot [x,y,z]", "orientation_vision_spot [yaw,pitch,roll]"]
         self.columns_action_scripts = ["timestamp", "action_executed", "battery_percentage"]
-        self.participant_number = 0
-        conditions = [
-            "speech_freewalking",
-            "speech_stationary",
-            "gestures_freewalking",
-            "gestures_stationary",
-            "controller_freewalking",
-            "controller_stationary",
-        ]
-        condition = conditions[3]
+        self.participant_number = participant
         participant_dir = f"c:/dev/SpotDockerImage/data/experiments/P{self.participant_number:03d}"
         
         try:
@@ -295,8 +288,10 @@ class FsmNode:
             writer.writerow(data_to_save)
             file.close()
         
-    def run(self):
+    def run(self, video_stream_saver):
         rospy.init_node('listener', anonymous=True)
+        vss_thread = threading.Thread(target=video_stream_saver.run)
+        vss_thread.start()
         rospy.Subscriber("chatter", String, self.callback_action)
         rospy.Subscriber("data_collection", Float32MultiArray, self.callback_data_collection)
         
@@ -316,7 +311,8 @@ class FsmNode:
         # print("Calibration Finished.")
         
         rospy.spin()
-    
+        
+        
     def callback_data_collection(self, data):
         array = data.data
         timestamp  = time.time() - self.node_start_time
@@ -345,9 +341,20 @@ class FsmNode:
         rospy.spin()
 
 if __name__ == "__main__":
-
+    participant = 996
+    conditions = [
+            "speech_freewalking",
+            "speech_stationary",
+            "gestures_freewalking",
+            "gestures_stationary",
+            "controller_freewalking",
+            "controller_stationary",
+    ]
+    condition = conditions[0]
+     
     robotInterface = SpotControlInterface(DIRECT_CONTROL_FREQUENCY)
     # robotInterface = None
+    
     
     if robotInterface:
         sdk = bosdyn.client.create_standard_sdk('SpotControlInterface')
@@ -379,10 +386,16 @@ if __name__ == "__main__":
             
             time.sleep(1)
 
-            fsm = FsmNode(robot=robotInterface, robot_sdk=robot)
-            fsm.run()
+
+            fsm = FsmNode(robot=robotInterface, robot_sdk=robot, participant=participant, condition=condition)
+            vss = VideoStreamSaver(robotInterface.image_client, participant, condition)
+            fsm.run(vss)
     else:
         fsm = FsmNode(robot=robotInterface, robot_sdk=None) 
         fsm.run_dummy()
         
-    # robotInterface.sit_down()
+    for out in vss.video_writers:
+        out.release()
+        
+    vss.video_writers[0].release()
+    vss.video_writers[1].release()
