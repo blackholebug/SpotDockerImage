@@ -19,9 +19,8 @@ class GestureClassificationNode:
         self.clf = pickle.load(open(Path(__file__).parent.parent.joinpath("models/Poly2SVC.model"), 'rb'))
         self.ppl = pickle.load(open(Path(__file__).parent.parent.joinpath("models/training.ppl"), 'rb'))
         self.pub_chatter = rospy.Publisher('/chatter', String, queue_size=2)
-        self.pub_rtg = rospy.Publisher('/real_time_gesture', String, queue_size=60)
         self.frame_buffer = []
-        self.sliding_window = 30
+        self.sliding_window = 60
         self.last_gesture = "NoGesture"
         self.last_execution_time = time.time()
         self.execution_duration = 2 # duration for action execution
@@ -85,10 +84,10 @@ class GestureClassificationNode:
         # self.pub_rtg.publish(f"{res}")
         current_time = time.time()
         if res != self.last_gesture:
-            # if current_time - self.last_execution_time >= self.execution_duration:
-            # self.last_execution_time = current_time
-            self.pub_chatter.publish(f"{res}")
-            self.last_gesture = res
+            if current_time - self.last_execution_time >= self.execution_duration:
+                self.last_execution_time = current_time
+                self.pub_chatter.publish(f"{res}")
+                self.last_gesture = res
 
     def callback_gesture(self, data):
         if len(self.frame_buffer) < self.sliding_window:
