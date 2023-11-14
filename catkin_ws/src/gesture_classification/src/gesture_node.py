@@ -8,7 +8,7 @@ import pickle
 import threading
 from scipy.spatial.transform import Rotation as R
 from collections import Counter
-from datetime import datetime
+from pathlib import Path
 
 
 class GestureClassificationNode:
@@ -16,17 +16,11 @@ class GestureClassificationNode:
     """
     
     def __init__(self):
-        windows_path_addition = "c:/dev/SpotDockerImage"
-        try:
-            self.clf = pickle.load(open("/catkin_ws/src/gesture_classification/models/Poly2SVC.model", 'rb'))
-            self.ppl = pickle.load(open("/catkin_ws/src/gesture_classification/models/training.ppl", 'rb'))
-        except:
-            self.clf = pickle.load(open(windows_path_addition+"/catkin_ws/src/gesture_classification/models/Poly2SVC.model", 'rb'))
-            self.ppl = pickle.load(open(windows_path_addition+"/catkin_ws/src/gesture_classification/models/training.ppl", 'rb'))
+        self.clf = pickle.load(open(Path(__file__).parent.parent.joinpath("models/Poly2SVC.model"), 'rb'))
+        self.ppl = pickle.load(open(Path(__file__).parent.parent.joinpath("models/training.ppl"), 'rb'))
         self.pub_chatter = rospy.Publisher('/chatter', String, queue_size=2)
-        self.pub_rtg = rospy.Publisher('/real_time_gesture', String, queue_size=60)
         self.frame_buffer = []
-        self.frame_sample_rate = 30
+        self.sliding_window = 60
         self.last_gesture = "NoGesture"
         self.last_execution_time = time.time()
         self.execution_duration = 2 # duration for action execution
@@ -35,13 +29,13 @@ class GestureClassificationNode:
         # self.slice_size = int( self.serie_size // self.recognition_frequency )
         
         self.label_decoding=[
-            'walk_to_left',#'GoLeft',
-            'walk_to_right',#'GoRight',
+            'fist',#'None'
             'turn_to_left',#'TurnLeft',
             'turn_to_right',#'TurnRight',
             'walk_to_forward', #'Forwards',
             'walk_to_backward',#'Backwards'
-            'fist',#'None'
+            'walk_to_left',#'GoLeft',
+            'walk_to_right',#'GoRight',
         ]
 
         # self.label_decoding=[
@@ -63,14 +57,14 @@ class GestureClassificationNode:
         # only when most labels are the same and the lowest confidence level is above 0.85, return the gesture
         invalid_gesture = "NoGesture"
         vote_threshold = 0.6
-        conf_threshold = 0.92
+        conf_threshold = 0.8
         label, frequency = self.frequency_query(labels)
         if frequency/len(labels) < vote_threshold:
             return invalid_gesture
         if confidence.mean() < conf_threshold:
             return invalid_gesture
         # mannually check the fist gesture
-        if label == 6:
+        if label == 0:
             return invalid_gesture
         print(f"current convidance: {confidence.mean()}")
         return self.label_decoding[label]
@@ -90,13 +84,19 @@ class GestureClassificationNode:
         # self.pub_rtg.publish(f"{res}")
         current_time = time.time()
         if res != self.last_gesture:
-            # if current_time - self.last_execution_time >= self.execution_duration:
-            # self.last_execution_time = current_time
-            self.pub_chatter.publish(f"{res}")
-            self.last_gesture = res
+            if res == "NoGesture":
+                # publish and continue
+                self.pub_chatter.publish(f"{res}")
+                self.last_gesture = res
+            else:
+                # wait for the execution of the last valid action
+                if current_time - self.last_execution_time >= self.execution_duration:
+                    self.last_execution_time = current_time
+                    self.pub_chatter.publish(f"{res}")
+                    self.last_gesture = res
 
     def callback_gesture(self, data):
-        if len(self.frame_buffer) < self.frame_sample_rate:
+        if len(self.frame_buffer) < self.sliding_window:
             self.frame_buffer.append(data.data)
         else:
             self.frame_buffer.pop(0)
