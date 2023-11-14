@@ -84,10 +84,16 @@ class GestureClassificationNode:
         # self.pub_rtg.publish(f"{res}")
         current_time = time.time()
         if res != self.last_gesture:
-            if current_time - self.last_execution_time >= self.execution_duration:
-                self.last_execution_time = current_time
+            if res == "NoGesture":
+                # publish and continue
                 self.pub_chatter.publish(f"{res}")
                 self.last_gesture = res
+            else:
+                # wait for the execution of the last valid action
+                if current_time - self.last_execution_time >= self.execution_duration:
+                    self.last_execution_time = current_time
+                    self.pub_chatter.publish(f"{res}")
+                    self.last_gesture = res
 
     def callback_gesture(self, data):
         if len(self.frame_buffer) < self.sliding_window:
