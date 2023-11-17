@@ -54,6 +54,8 @@ class VideoStreamSaver:
                 if i == 1:
                     print("Back camera")
                 i += 1
+                
+                cv2.waitKey(1)
 
 if __name__ == "__main__":
     # Create and authenticate a bosdyn robot object.

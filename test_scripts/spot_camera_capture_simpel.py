@@ -53,12 +53,15 @@ if __name__ == "__main__":
     robot.time_sync.wait_for_sync()
     image_client = robot.ensure_client(ImageClient.default_service_name)
         
-    vss = VideoStreamSaver(image_client, 90)
-    for i in tqdm(range(10)):
-        vss.video_thread_with_image_client()
-        
-        cv2.waitKey(20)
-        
-        
-    for out in vss.video_writers:
-        out.release()
+    quality_scores = [1, 25, 50, 75, 90, 100]
+    
+    for quality in quality_scores:
+        vss = VideoStreamSaver(image_client, quality_scores)
+        for i in tqdm(range(50)):
+            vss.video_thread_with_image_client()
+            
+            cv2.waitKey(1)
+            
+            
+        for out in vss.video_writers:
+            out.release()
