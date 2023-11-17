@@ -76,7 +76,7 @@ class FsmNode:
     def __init__(self, robot: SpotControlInterface, robot_sdk, participant=-1, condition="null"):
         ## data collection
         self.node_start_time = time.time()
-        self.columns_hololens_data = ["timestamp", "gaze_origin [x,y,z]", "gaze_direction unit vector [x,y,z]", "Object with hitpoint"]
+        self.columns_hololens_data = ["timestamp", "gaze_origin [x,y,z]", "gaze_direction unit vector [x,y,z]", "gaze_direction screen position [x,y,?]", "camera position [x,y,z]", "camera orientation [w,x,y,z]"]
         self.columns_spot_data = ["timestamp", "position_odom_spot [x,y,z]", "orientation_odom_spot [yaw,pitch,roll]", "position_vision_spot [x,y,z]", "orientation_vision_spot [yaw,pitch,roll]"]
         self.columns_action_scripts = ["timestamp", "action_executed", "battery_percentage"]
         
@@ -316,7 +316,7 @@ class FsmNode:
         array = data.data
         timestamp  = time.time() - self.node_start_time
         entry = [timestamp]
-        entry.extend([array[:3], array[3:6], "no object"])
+        entry.extend([array[:3], array[3:6], array[6:9], array[9:12], array[12:16]])
         with open(self.filename_hololens, "a", newline='', encoding="utf-8") as f:
             writer = csv.writer(f)
             writer.writerow(entry)
@@ -340,7 +340,7 @@ class FsmNode:
         rospy.spin()
 
 if __name__ == "__main__":
-    participant = 996
+    participant = 995
     conditions = [
             "speech_freewalking",
             "speech_stationary",
@@ -351,8 +351,8 @@ if __name__ == "__main__":
     ]
     condition = conditions[0]
      
-    # robotInterface = SpotControlInterface(DIRECT_CONTROL_FREQUENCY)
-    robotInterface = None
+    robotInterface = SpotControlInterface(DIRECT_CONTROL_FREQUENCY)
+    # robotInterface = None
     
     
     if robotInterface:
