@@ -20,6 +20,7 @@ from datetime import datetime
 
 # for parsing protobuf messages like robot_state
 from google.protobuf.json_format import MessageToDict
+from pathlib import Path
 
 import bosdyn.client
 import bosdyn.client.lease
@@ -72,24 +73,21 @@ def try_state_send(state_machine, action):
 
 class FsmNode:
 
-    def __init__(self, robot: SpotControlInterface, robot_sdk, participant, condition):
+    def __init__(self, robot: SpotControlInterface, robot_sdk, participant=-1, condition="null"):
         ## data collection
         self.node_start_time = time.time()
         self.columns_hololens_data = ["timestamp", "gaze_origin [x,y,z]", "gaze_direction unit vector [x,y,z]", "Object with hitpoint"]
         self.columns_spot_data = ["timestamp", "position_odom_spot [x,y,z]", "orientation_odom_spot [yaw,pitch,roll]", "position_vision_spot [x,y,z]", "orientation_vision_spot [yaw,pitch,roll]"]
         self.columns_action_scripts = ["timestamp", "action_executed", "battery_percentage"]
-        self.participant_number = participant
-        participant_dir = f"c:/dev/SpotDockerImage/data/experiments/P{self.participant_number:03d}"
         
-        try:
-            # Create the directory
-            os.mkdir(participant_dir)
-            print(f"Directory '{participant_dir}' was created successfully.")
-        except FileExistsError:
-            print(f"Directory '{participant_dir}' already exists.")
-        except OSError as error:
-            print(f"Creation of the directory '{participant_dir}' failed due to: {error}")
-    
+        self.participant_number = participant
+        participant_dir = Path(__file__).parent.parent.parent.parent.parent.joinpath(f"/data/experiments/P{participant:03d}/")
+        
+        self.pub_status = rospy.Publisher('/robot_status', String, queue_size=2)
+        self.last_execution_time = None
+        self.wait_time_for_execution = 2
+        
+        participant_dir.mkdir( parents=True, exist_ok=True )    
         self.filename_odom = f"{participant_dir}/{condition}_odom.csv"
         self.filename_hololens = f"{participant_dir}/{condition}_hololens.csv"
         self.filename_actions = f"{participant_dir}/{condition}_actions.csv"
@@ -149,19 +147,20 @@ class FsmNode:
             writer = csv.writer(f)
             writer.writerow([timestamp, data.data, percentage])
             
-        print(f"\nI heard: {data.data}")
-        
-        if data.data == "stop_action" and self.robot.current_state_direct_control:
-            self.robot.stop_direct_control()
-            self.robot.current_state_direct_control = False
+        if not self.last_execution_time or time.time() - self.last_execution_time > self.wait_time_for_execution:
+            self.last_execution_time = time.time()
             try_state_send(self.sm, data.data)
-        elif self.robot.current_state_direct_control:
-            pass
+            print(f"\nI heard: {data.data}")
         else:
-            try_state_send(self.sm, data.data)
-            
+            print(f"\nI heard: {data.data} but I am waiting for the execution")
+
     def callback_action_dummy(self, data):
-        print(f"\nI heard: {data.data}")
+        if not self.last_execution_time or time.time() - self.last_execution_time > self.wait_time_for_execution:
+            self.last_execution_time = time.time()
+            self.pub_status.publish("running")
+            print(f"\nI heard: {data.data}")
+        else:
+            print(f"\nI heard: {data.data} but I am waiting for the execution")
         
     def triangulate_position(self, data):
         pose = self.get_robot_vision_pose()
@@ -352,8 +351,8 @@ if __name__ == "__main__":
     ]
     condition = conditions[0]
      
-    robotInterface = SpotControlInterface(DIRECT_CONTROL_FREQUENCY)
-    # robotInterface = None
+    # robotInterface = SpotControlInterface(DIRECT_CONTROL_FREQUENCY)
+    robotInterface = None
     
     
     if robotInterface:
@@ -390,12 +389,14 @@ if __name__ == "__main__":
             fsm = FsmNode(robot=robotInterface, robot_sdk=robot, participant=participant, condition=condition)
             vss = VideoStreamSaver(robotInterface.image_client, participant, condition)
             fsm.run(vss)
+
+        for out in vss.video_writers:
+            out.release()
+            
+        vss.video_writers[0].release()
+        vss.video_writers[1].release()
+
     else:
         fsm = FsmNode(robot=robotInterface, robot_sdk=None) 
         fsm.run_dummy()
         
-    for out in vss.video_writers:
-        out.release()
-        
-    vss.video_writers[0].release()
-    vss.video_writers[1].release()
