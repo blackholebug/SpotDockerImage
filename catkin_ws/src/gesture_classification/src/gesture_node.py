@@ -20,10 +20,10 @@ class GestureClassificationNode:
         self.ppl = pickle.load(open(Path(__file__).parent.parent.joinpath("models/training.ppl"), 'rb'))
         self.pub_chatter = rospy.Publisher('/chatter', String, queue_size=2)
         self.frame_buffer = []
-        self.sliding_window = 60
+        self.sliding_window = 90
         self.last_gesture = "NoGesture"
         self.last_execution_time = time.time()
-        self.execution_duration = 2 # duration for action execution
+        self.execution_duration = 3 # duration for action execution
 
         # self.recognition_frequency = 2 # Hz
         # self.slice_size = int( self.serie_size // self.recognition_frequency )
@@ -56,8 +56,8 @@ class GestureClassificationNode:
     def check_threshold(self, labels: np.ndarray, confidence: np.ndarray):
         # only when most labels are the same and the lowest confidence level is above 0.85, return the gesture
         invalid_gesture = "NoGesture"
-        vote_threshold = 0.6
-        conf_threshold = 0.8
+        vote_threshold = 0.7
+        conf_threshold = 0.83
         label, frequency = self.frequency_query(labels)
         if frequency/len(labels) < vote_threshold:
             return invalid_gesture
@@ -66,7 +66,7 @@ class GestureClassificationNode:
         # mannually check the fist gesture
         if label == 0:
             return invalid_gesture
-        print(f"current convidance: {confidence.mean()}")
+        # print(f"current convidance: {confidence.mean()}; current label {self.label_decoding[label]}")
         return self.label_decoding[label]
 
 
@@ -76,17 +76,13 @@ class GestureClassificationNode:
         y = self.clf.predict_proba(x)
         labels = np.argmax(y, axis=1)
         confidence = np.max(y, axis=1)
-        # if self.is_debug:
-        #     for i in range(len(labels)):
-        #         print(f"current label: {labels[i]}; current confidence: {confidence[i]} \n")
         res = self.check_threshold(labels, confidence)
-        print(f"current gesture: {res}")
-        # self.pub_rtg.publish(f"{res}")
+        # print(f"current gesture: {res}")
         current_time = time.time()
         if res != self.last_gesture:
             if res == "NoGesture":
                 # publish and continue
-                self.pub_chatter.publish(f"{res}")
+                # self.pub_chatter.publish(f"{res}")
                 self.last_gesture = res
             else:
                 # wait for the execution of the last valid action
